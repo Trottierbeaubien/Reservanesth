@@ -1,1 +1,1 @@
-export function needsAutomaticRoomDetection(data,canManage,attempted){return !!(data?.scan?.key&&canManage&&!data.scan.roomDetectionDone&&!attempted.has(data.scan.key))}
+export function needsAutomaticRoomDetection(data,canManage,attempted){return !!(data?.scan?.key&&canManage&&(!data.scan.roomDetectionDone||(data.scan.roomDetectionVersion||0)<2)&&!attempted.has(data.scan.key))}

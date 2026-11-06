@@ -60,8 +60,8 @@ sont téléchargés; aucune image n’est envoyée à un service OCR externe.
 Chaque section va de son en-tête au suivant. Les en-têtes hors liste servent
 aussi de limites. Toutes les sections C/C1/C2 sont réunies dans l’entrée CIC,
 y compris si elles sont séparées par une autre salle. Les limites sont ajustables
-section par section. Si une salle n’est pas reconnue, le programme complet reste
-affiché au lieu d’inventer une portion de hauteur fixe.
+section par section. Si une salle n’est pas reconnue, une indication invite à vérifier
+les repères; le programme complet reste accessible par son bouton dédié.
 
 Le mode essai permet au coordonnateur de simuler tous les tours sans compléter
 les adresses des collègues. Notifications et courriels sont alors dirigés vers
@@ -69,3 +69,10 @@ son adresse seulement; les PDF sont marqués ESSAI. La désactivation du mode es
 réservée au propriétaire lors de la préparation d’une nouvelle ronde.
 Le suivi de ronde affiche les personnes sautées, en attente, au tour et affectées.
 En mode équipe, le responsable reçoit des notifications de progression.
+
+La clinique préop ouverte est une activité à choisir dans les rangs, sans section OCR.
+La lecture privilégie les gros caractères et le contraste. L’icône HDQ bleue
+représente un laryngoscope et une sonde. Le paramètre ?apercu=visuel montre
+uniquement des données fictives et bloque toutes les actions réseau de l’application.
+Le repérage v2 ajoute des bandes locales chevauchantes à haute résolution pour
+les longs scans; les anciens repérages sont repris automatiquement une fois.
