@@ -5,7 +5,7 @@ const delay=(ms:number|undefined)=>ms===undefined?'':Math.floor(ms/3600000)+':'+
 export async function makePdf(d:Programme,full:boolean,scan?:Uint8Array){
  const doc=await PDFDocument.create(),font=await doc.embedFont(StandardFonts.Helvetica),bold=await doc.embedFont(StandardFonts.HelveticaBold);let page=doc.addPage([842,595]);
  const text=(value:unknown,x:number,y:number,size=10,heavy=false)=>page.drawText(safe(value),{x,y,size,font:heavy?bold:font,color:rgb(.08,.2,.2)});
- text('PLANIFICATION DES EFFECTIFS - ANESTHESIOLOGIE HDQ',30,560,17,true);text('Journee operatoire : '+d.date,30,536,12);
+ text('PLANIFICATION DES EFFECTIFS - ANESTHESIOLOGIE HDQ',30,560,17,true);text('Journee operatoire : '+d.date+(d.testMode?' - ESSAI DU COORDONNATEUR':''),30,536,12);
  const rowHeight=25,startY=505,cols=full?[30,115,300,350,535,690]:[30,170],headers=full?['SALLES','ANESTHESIOLOGISTES','RANG','NOM','NOTES','DELAIS']:['SALLES','ANESTHESIOLOGISTES'];
  const rows=ROOM_IDS.map(id=>({label:id==='CIC'?'CIC - Curietherapie':'Salle '+Number(id),value:d.openRooms.includes(id)?(person(d,d.assignments[id])?.name||'A determiner'):'Non ouvert'}));
  rows.push(...[{key:'preop',label:'Clinique pre-op'},{key:'hbo',label:'Hors-bloc'},{key:'veineux',label:'Acces veineux'},{key:'garde',label:'Garde'}].map(r=>({label:r.label,value:r.key==='preop'&&!d.clinicOpen?'Non ouvert':person(d,d.roles[r.key])?.name||'A determiner'})));

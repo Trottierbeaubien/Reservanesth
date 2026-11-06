@@ -50,3 +50,22 @@ pour prendre en charge les clés publishable.
 Les tests utilisent des personnes et documents fictifs. Aucun courriel ni push
 réel n’est envoyé par les tests. La réception réelle sur iPhone et la délivrabilité
 Brevo doivent être validées par les utilisateurs après configuration.
+
+## Repérage et essai du coordonnateur
+
+Les listes sont triées par nom de famille. Les rangs saisis restent inchangés.
+Le repérage OCR est effectué sur l’appareil : seuls les en-têtes « SALLE NUMÉRO »
+et leurs coordonnées sont conservés. Les fichiers publics du moteur Tesseract
+sont téléchargés; aucune image n’est envoyée à un service OCR externe.
+Chaque section va de son en-tête au suivant. Les en-têtes hors liste servent
+aussi de limites. Toutes les sections C/C1/C2 sont réunies dans l’entrée CIC,
+y compris si elles sont séparées par une autre salle. Les limites sont ajustables
+section par section. Si une salle n’est pas reconnue, le programme complet reste
+affiché au lieu d’inventer une portion de hauteur fixe.
+
+Le mode essai permet au coordonnateur de simuler tous les tours sans compléter
+les adresses des collègues. Notifications et courriels sont alors dirigés vers
+son adresse seulement; les PDF sont marqués ESSAI. La désactivation du mode est
+réservée au propriétaire lors de la préparation d’une nouvelle ronde.
+Le suivi de ronde affiche les personnes sautées, en attente, au tour et affectées.
+En mode équipe, le responsable reçoit des notifications de progression.

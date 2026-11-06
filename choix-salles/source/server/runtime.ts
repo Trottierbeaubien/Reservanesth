@@ -1,6 +1,6 @@
 import {createClient} from '@supabase/supabase-js';
 import {buildPushPayload} from '@block65/webcrypto-web-push';
-import {initial,canManage,nextChooser,person,type Programme} from './model.ts';
+import {initial,canManage,nextChooser,person,sortDirectory,type Programme} from './model.ts';
 import {transition,RoundError,type Event} from './round.ts';
 import {makePdf} from './pdf.ts';
 const HOST='https://trottierbeaubien.github.io';
@@ -23,7 +23,7 @@ export function createHandler(settings:{supabaseUrl:string,serviceKey:string,bre
   }catch{/* The durable in-app notification remains pending. */}}));
  }
  async function mailSettings(){const rows=must(await db.from('hdq_runtime').select('value').eq('id','mail'));const saved=rows[0]?.value||{};return {apiKey:settings.brevoKey||saved.apiKey||'',senderEmail:settings.senderEmail||saved.senderEmail||'',senderName:settings.senderName||saved.senderName||'Anesthésiologie HDQ',to:saved.to||[],cc:saved.cc||[],fullTo:saved.fullTo||[],fullCc:saved.fullCc||[]}}
- async function snapshot(email:string,userId:string,isOwner=false){const s=await state();const next=nextChooser(s.data),me=s.data.directory.find(p=>p.email===email);const notifications=must(await db.from('hdq_notifications').select('id,kind,payload,read,push_status').eq('email',email).order('created_at',{ascending:false}).limit(30));const mail=await mailSettings();return {...s,email,userId,isOwner,mailConfig:isOwner?{...mail,apiKey:undefined}:undefined,canManage:canManage(s.data,email),isStarter:!!s.data.roundStart&&s.data.roundOwner===email,myPersonId:me?.id||null,nextPersonId:next,pendingChoice:!!s.data.roundStart&&!!me&&next===me.id,notifications,emailReady:!!mail.apiKey&&!!mail.senderEmail&&!!mail.to.length&&!!mail.fullTo.length}}
+ async function snapshot(email:string,userId:string,isOwner=false){const s=await state();s.data.directory=sortDirectory(s.data.directory);const next=nextChooser(s.data),me=s.data.directory.find(p=>p.email===email);const notifications=must(await db.from('hdq_notifications').select('id,kind,payload,read,push_status').eq('email',email).order('created_at',{ascending:false}).limit(30));const mail=await mailSettings();return {...s,email,userId,isOwner,mailConfig:isOwner?{...mail,apiKey:undefined}:undefined,canManage:canManage(s.data,email),isStarter:!!s.data.roundStart&&s.data.roundOwner===email,myPersonId:me?.id||null,nextPersonId:next,pendingChoice:!!s.data.roundStart&&!!next&&(s.data.testMode?s.data.testRecipient===email:!!me&&next===me.id),notifications,emailReady:!!mail.apiKey&&!!mail.senderEmail&&!!mail.to.length&&!!mail.fullTo.length}}
  return async function handler(request:Request):Promise<Response>{
   const origin=request.headers.get('origin');const cors:Record<string,string>={'Access-Control-Allow-Origin':HOST,'Access-Control-Allow-Headers':'authorization,apikey,content-type,x-revision','Access-Control-Allow-Methods':'GET,POST,PUT,OPTIONS','Access-Control-Expose-Headers':'Content-Disposition','Vary':'Origin','Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'};
   const reply=(value:unknown,status=200)=>Response.json(value,{status,headers:cors});
@@ -48,7 +48,7 @@ export function createHandler(settings:{supabaseUrl:string,serviceKey:string,bre
     const bytes=await makePdf(s.data,full,scan);return new Response(bytes as BodyInit,{headers:{...cors,'Content-Type':'application/pdf','Content-Disposition':'attachment; filename="HDQ_'+s.data.date+(full?'_complet':'')+'.pdf"'}});
    }
    if(request.method==='PUT'&&action==='scan'){
-    const s=await state();if(!canManage(s.data,email))return reply({error:'Seul le responsable de la ronde peut remplacer le programme.'},403);
+    const s=await state();if(s.data.testMode&&s.data.testRecipient!==email)return reply({error:'Cet essai est réservé au coordonnateur.'},403);if(!canManage(s.data,email))return reply({error:'Seul le responsable de la ronde peut remplacer le programme.'},403);
     if(Number(request.headers.get('x-revision'))!==s.revision)return reply({error:'La ronde a changé. Actualisez et réessayez.'},409);
     const max=15*1024*1024;if(Number(request.headers.get('content-length')||0)>max)return reply({error:'Maximum 15 Mo.'},413);
     const reader=request.body?.getReader();if(!reader)return reply({error:'Image manquante.'},400);const chunks:Uint8Array[]=[];let size=0;
@@ -57,7 +57,7 @@ export function createHandler(settings:{supabaseUrl:string,serviceKey:string,bre
     const type=bytes[0]===255&&bytes[1]===216&&bytes[2]===255?'image/jpeg':bytes[0]===137&&bytes[1]===80&&bytes[2]===78&&bytes[3]===71?'image/png':null;
     if(!type)return reply({error:'Le programme doit être une image JPEG ou PNG.'},400);
     const key='current/'+crypto.randomUUID()+(type==='image/png'?'.png':'.jpg');must(await db.storage.from('hdq-programmes').upload(key,bytes,{contentType:type,upsert:false}));
-    const old=s.data.scan?.key;s.data.scan={key,type,updatedAt:Date.now()};s.data.crops={};
+    const old=s.data.scan?.key;s.data.scan={key,type,updatedAt:Date.now()};s.data.crops={};s.data.sections={};
     if(!await commit(s.revision,s.data)){await db.storage.from('hdq-programmes').remove([key]);return reply({error:'La ronde a changé pendant l’importation. Réessayez.'},409)}
     if(old)await db.storage.from('hdq-programmes').remove([old]);return reply(await snapshot(email,user.id,!!membership[0].is_owner));
    }
@@ -84,7 +84,7 @@ export function createHandler(settings:{supabaseUrl:string,serviceKey:string,bre
     must(await db.from('hdq_runtime').upsert({id:'mail',value},{onConflict:'id'}));return reply({ok:true});
    }
    if(action==='email'){
-    const mail=await mailSettings();const s=await state();if(!s.data.roundStart||s.data.roundOwner!==email)return reply({error:'Seul le responsable de la ronde peut envoyer les PDF.'},403);
+    const mail=await mailSettings();const s=await state();if(s.data.testMode){mail.to=[s.data.testRecipient!];mail.cc=[];mail.fullTo=[s.data.testRecipient!];mail.fullCc=[]}if(!s.data.roundStart||s.data.roundOwner!==email)return reply({error:'Seul le responsable de la ronde peut envoyer les PDF.'},403);
     if(nextChooser(s.data))return reply({error:'Attendez la fin des choix avant d’envoyer les PDF.'},409);
     if(!mail.apiKey||!mail.senderEmail||!mail.to.length||!mail.fullTo.length)return reply({error:'Brevo doit être configuré côté serveur avant l’envoi. Les PDF peuvent déjà être téléchargés.'},503);
     const id=s.data.roundId+'-'+s.revision;const last=must(await db.from('hdq_deliveries').select('id,status,created_at').order('created_at',{ascending:false}).limit(1));
@@ -94,9 +94,10 @@ export function createHandler(settings:{supabaseUrl:string,serviceKey:string,bre
     const summary=await makePdf(s.data,false);let image:Uint8Array|undefined;if(s.data.scan)image=new Uint8Array(await must(await db.storage.from('hdq-programmes').download(s.data.scan.key)).arrayBuffer());const full=await makePdf(s.data,true,image);
     const content=(bytes:Uint8Array)=>{let out='';for(let i=0;i<bytes.length;i+=8192)out+=String.fromCharCode(...bytes.subarray(i,i+8192));return btoa(out)};
     const recipients=[{to:mail.to,cc:mail.cc,bytes:summary,label:''},{to:mail.fullTo,cc:mail.fullCc,bytes:full,label:' (COMPLET)'}];
-    let sent=0;try{for(const r of recipients){const response=await fetch('https://api.brevo.com/v3/smtp/email',{method:'POST',headers:{'api-key':mail.apiKey,'Content-Type':'application/json'},body:JSON.stringify({sender:{email:mail.senderEmail,name:mail.senderName||'Anesthésiologie HDQ'},to:r.to.map((email:string)=>({email})),cc:r.cc.map((email:string)=>({email})),subject:'Planification des effectifs – Anesthésiologie – '+s.data.date+r.label,textContent:'Bonjour,\n\nVeuillez trouver ci-joint la planification des effectifs en anesthésiologie pour le '+s.data.date+'.\n\nService d’Anesthésiologie – Hôtel-Dieu de Québec',attachment:[{content:content(r.bytes),name:'HDQ_'+s.data.date+(r.label?'_complet':'')+'.pdf'}],headers:{'idempotencyKey':id+'-'+sent}}),signal:AbortSignal.timeout(15000)});if(!response.ok)throw Error('Email request failed');sent++;await db.from('hdq_deliveries').update({detail:{sent}}).eq('id',id)}await db.from('hdq_deliveries').update({status:'sent'}).eq('id',id);return reply({ok:true,sent})}catch{await db.from('hdq_deliveries').update({status:'needs-review',detail:{sent}}).eq('id',id);return reply({error:'L’envoi n’est pas entièrement confirmé ('+sent+'/2). Vérifiez Brevo avant de réessayer pour éviter les doublons.'},502)}
+    let sent=0;try{for(const r of recipients){const response=await fetch('https://api.brevo.com/v3/smtp/email',{method:'POST',headers:{'api-key':mail.apiKey,'Content-Type':'application/json'},body:JSON.stringify({sender:{email:mail.senderEmail,name:mail.senderName||'Anesthésiologie HDQ'},to:r.to.map((email:string)=>({email})),cc:r.cc.map((email:string)=>({email})),subject:(s.data.testMode?'ESSAI — ':'')+'Planification des effectifs – Anesthésiologie – '+s.data.date+r.label,textContent:'Bonjour,\n\nVeuillez trouver ci-joint la planification des effectifs en anesthésiologie pour le '+s.data.date+'.\n\nService d’Anesthésiologie – Hôtel-Dieu de Québec',attachment:[{content:content(r.bytes),name:'HDQ_'+s.data.date+(r.label?'_complet':'')+'.pdf'}],headers:{'idempotencyKey':id+'-'+sent}}),signal:AbortSignal.timeout(15000)});if(!response.ok)throw Error('Email request failed');sent++;await db.from('hdq_deliveries').update({detail:{sent}}).eq('id',id)}await db.from('hdq_deliveries').update({status:'sent'}).eq('id',id);return reply({ok:true,sent})}catch{await db.from('hdq_deliveries').update({status:'needs-review',detail:{sent}}).eq('id',id);return reply({error:'L’envoi n’est pas entièrement confirmé ('+sent+'/2). Vérifiez Brevo avant de réessayer pour éviter les doublons.'},502)}
    }
    const s=await state();if(body.revision!==s.revision)return reply({error:'La ronde a changé. Actualisez et réessayez.'},409);
+   if(s.data.testMode&&s.data.testRecipient!==email)return reply({error:'Cet essai est réservé au coordonnateur.'},403);if(body.action==='prepare'&&typeof body.setup?.testMode==='boolean'&&body.setup.testMode!==!!s.data.testMode&&!membership[0].is_owner)return reply({error:'Seul le propriétaire peut changer le mode essai.'},403);
    const result=transition(s.data,body,email);const oldNext=nextChooser(s.data),next=nextChooser(result.data);const reset=body.action==='reset';
    if(!await commit(s.revision,result.data,result.events,oldNext!==next||reset||body.action==='start',reset))return reply({error:'Un autre choix vient d’être enregistré. Actualisez et réessayez.'},409);
    if(reset&&s.data.scan)await db.storage.from('hdq-programmes').remove([s.data.scan.key]);
