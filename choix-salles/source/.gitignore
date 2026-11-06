@@ -1,0 +1,8 @@
+node_modules/
+.package-cache/
+dist/
+.env*
+!.env.example
+.supabase/
+
+.test-output/
