@@ -5,7 +5,7 @@ export function parseHeading(text){const normalized=String(text).normalize('NFD'
 export function detectedSections(lines,height){
  if(!Number.isFinite(height)||height<=0)return {sections:{},headings:[]};
  const candidates=lines.map(line=>{const h=parseHeading(line.text);const b=line.bbox;if(!h||!b||!Number.isFinite(b.y0)||!Number.isFinite(b.y1))return null;return {...h,y:Math.max(0,b.y0),height:Math.max(1,b.y1-b.y0),confidence:line.confidence||0}}).filter(Boolean).sort((a,b)=>a.y-b.y);
- const headings=[];for(const h of candidates){const previous=headings.at(-1);if(previous&&h.label===previous.label&&h.y-previous.y<Math.max(8,h.height*.7)){if(h.confidence>previous.confidence)headings[headings.length-1]=h;continue}headings.push(h)}
+ const headings=[];for(const h of candidates){const previous=headings.at(-1);if(previous&&h.y-previous.y<Math.max(8,h.height*.7,previous.height*.7)){if(h.room&&!previous.room||!!h.room===!!previous.room&&h.confidence>previous.confidence)headings[headings.length-1]=h;continue}headings.push(h)}
  const sections={};for(let i=0;i<headings.length;i++){const h=headings[i];if(!h.room)continue;const top=Math.max(0,h.y-h.height*.35),next=headings[i+1],bottom=next?Math.max(top,next.y-next.height*.35):height;if(bottom-top<2)continue;(sections[h.room]??=[]).push([top/height,Math.min(1,bottom/height)])}
  return {sections,headings:headings.map(({label,room,y})=>({label,room,y:y/height}))};
 }
