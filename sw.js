@@ -3,7 +3,7 @@ self.addEventListener('install',()=>self.skipWaiting());
 self.addEventListener('activate',event=>event.waitUntil(self.clients.claim()));
 self.addEventListener('fetch',event=>{if(event.request.mode==='navigate'&&new URL(event.request.url).origin===self.location.origin)event.respondWith(fetch(event.request,{cache:'no-store'}))});
 async function updateUnreadBadge(data){
- if(!['available','opened','admin_booking'].includes(data.kind))return;
+ if(!['available','opened','admin_booking','admin_registration'].includes(data.kind))return;
  try{
   if(!self.navigator?.setAppBadge)return;
   const clients=await self.clients.matchAll({type:'window',includeUncontrolled:true});
