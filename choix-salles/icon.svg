@@ -1,1 +1,30 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="102" fill="#123f7a"/><path d="M149 371V216" stroke="#eaf6ff" stroke-width="61" stroke-linecap="round"/><path d="M152 210V143h68c48 0 72 47 133 47h31" fill="none" stroke="#ffcf4a" stroke-width="32" stroke-linejoin="round" stroke-linecap="round"/><path d="M229 258c37-15 77 7 77 49v21c0 32 30 54 58 38 22-12 24-37 24-64v-56" fill="none" stroke="#8ee9f4" stroke-width="24" stroke-linecap="round"/><rect x="369" y="237" width="39" height="57" rx="13" fill="#e8fbff"/><path d="M126 249h46m-46 37h46m-46 37h46" stroke="#669dd1" stroke-width="7"/><text x="256" y="452" text-anchor="middle" font-family="Arial,sans-serif" font-size="49" font-weight="bold" fill="#fff">HDQ</text></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+<defs>
+ <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#225caa"/><stop offset="1" stop-color="#092951"/></linearGradient>
+ <radialGradient id="glow" cx=".28" cy=".18" r=".8"><stop stop-color="#7ac8ff" stop-opacity=".2"/><stop offset="1" stop-color="#7ac8ff" stop-opacity="0"/></radialGradient>
+ <linearGradient id="rim" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff"/><stop offset=".52" stop-color="#e9f6ff"/><stop offset="1" stop-color="#accfe7"/></linearGradient>
+ <linearGradient id="glass" x1="0" y1="0" x2=".85" y2="1"><stop stop-color="#a8e8ff"/><stop offset=".5" stop-color="#4aa9db"/><stop offset="1" stop-color="#24659b"/></linearGradient>
+ <linearGradient id="tube" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#c8f0ff"/><stop offset="1" stop-color="#6cb9e4"/></linearGradient>
+</defs>
+<path fill="url(#bg)" d="M0 0h512v512H0z"/>
+<path fill="url(#glow)" d="M0 0h512v512H0z"/>
+<circle cx="242" cy="237" r="177" fill="none" stroke="#c1eaff" stroke-opacity=".10" stroke-width="2"/>
+<path d="M239 296v27c0 45 43 64 84 64s68-27 68-65v-42" fill="none" stroke="#051c38" stroke-opacity=".35" stroke-width="35" stroke-linecap="round"/>
+<path d="M239 291v27c0 45 43 64 84 64s68-27 68-65v-42" fill="none" stroke="url(#tube)" stroke-width="27" stroke-linecap="round"/>
+<path d="M239 292v25c0 43 44 63 84 63s68-27 68-64v-40" fill="none" stroke="#f0fcff" stroke-opacity=".65" stroke-width="5" stroke-linecap="round" transform="translate(-5 -3)"/>
+<g transform="rotate(-22 224 230)">
+ <path d="M224 109c-24 0-43 32-66 71-26 44-51 89-51 123 0 48 50 77 117 77s117-29 117-77c0-34-25-79-51-123-23-39-42-71-66-71Z" fill="#041e3c" fill-opacity=".3" transform="translate(0 10)"/>
+ <path d="M224 99c-24 0-43 32-66 71-26 44-51 89-51 123 0 48 50 77 117 77s117-29 117-77c0-34-25-79-51-123-23-39-42-71-66-71Z" fill="url(#rim)"/>
+ <path d="M224 128c-14 0-30 26-48 57-23 39-45 79-45 107 0 31 37 52 93 52s93-21 93-52c0-28-22-68-45-107-18-31-34-57-48-57Z" fill="url(#glass)" stroke="#fff" stroke-opacity=".5" stroke-width="3"/>
+ <path d="M160 273c6-32 24-64 44-94" fill="none" stroke="#e6faff" stroke-opacity=".78" stroke-width="13" stroke-linecap="round"/>
+ <path d="M280 318c13-7 19-17 20-29" fill="none" stroke="#b7eaff" stroke-opacity=".45" stroke-width="5" stroke-linecap="round"/>
+ <circle cx="224" cy="287" r="42" fill="#164d7c" fill-opacity=".35"/>
+ <circle cx="224" cy="283" r="34" fill="url(#rim)"/>
+ <circle cx="224" cy="283" r="23" fill="#164c7a"/>
+ <circle cx="224" cy="283" r="13" fill="#8ad9f7"/>
+ <path d="M209 264a25 25 0 0 1 29-1" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round"/>
+</g>
+<rect x="373" y="251" width="36" height="42" rx="9" fill="url(#rim)"/>
+<path d="M381 262h20m-20 9h20m-20 9h20" stroke="#578db5" stroke-width="3" stroke-linecap="round"/>
+<text x="256" y="451" text-anchor="middle" font-family="DejaVu Sans,sans-serif" font-size="44" font-weight="bold" letter-spacing="7" fill="#f3faff">HDQ</text>
+</svg>

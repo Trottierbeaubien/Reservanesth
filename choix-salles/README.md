@@ -72,7 +72,7 @@ En mode équipe, le responsable reçoit des notifications de progression.
 
 La clinique préop ouverte est une activité à choisir dans les rangs, sans section OCR.
 La lecture privilégie les gros caractères et le contraste. L’icône HDQ bleue
-représente un laryngoscope et une sonde. Le paramètre ?apercu=visuel montre
+représente un masque incliné avec son circuit. Le paramètre ?apercu=visuel montre
 uniquement des données fictives et bloque toutes les actions réseau de l’application.
 Le repérage v2 ajoute des bandes locales chevauchantes à haute résolution pour
 les longs scans; les anciens repérages sont repris automatiquement une fois.

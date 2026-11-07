@@ -2,7 +2,7 @@ import {build} from 'esbuild';
 import {createHash} from 'node:crypto';
 import {mkdir,copyFile,readFile,writeFile} from 'node:fs/promises';
 await mkdir('dist',{recursive:true});
-for(const name of ['index.html','sw.js','manifest.webmanifest','icon.svg','icon-180.png','icon-192.png','icon-512.png','icon-anesthesie-180.png','icon-anesthesie-192.png','icon-anesthesie-512.png'])await copyFile('web/'+name,'dist/'+name);
+for(const name of ['index.html','sw.js','manifest.webmanifest','icon.svg','icon-180.png','icon-192.png','icon-512.png','icon-masque-hdq-180.png','icon-masque-hdq-192.png','icon-masque-hdq-512.png'])await copyFile('web/'+name,'dist/'+name);
 await build({entryPoints:['web/main.js'],outfile:'dist/main.js',bundle:true,minify:true,format:'esm',target:['es2022']});
 const revision=createHash('sha256').update(await readFile('dist/main.js')).digest('hex').slice(0,12);
 await writeFile('dist/index.html',(await readFile('web/index.html','utf8')).replace('./main.js','./main.js?v='+revision));
