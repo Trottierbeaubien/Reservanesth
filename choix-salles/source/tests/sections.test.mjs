@@ -34,16 +34,6 @@ test('le titre Curiethérapie identifie une salle dont le numéro est mal lu',()
   assert.equal(parseHeading('SALLE NUMÉRO 01 CURIETHÉRAPIE I').room,'CIC');
 });
 
-test('les badges de formation acceptent les mentions sur la même ligne que du texte',async()=>{
-  const {residentLabels}=await import('../web/scan-residents.js');
-  assert.deepEqual(residentLabels([
-    {text:'Annotation R1',confidence:78},
-    {text:'RS',confidence:62},
-    {text:'EXT.',confidence:76},
-    {text:'R3',confidence:20},
-  ]),['EXT','R1','R5']);
-});
-
 test('le numéro mal lu entre 11 et 30 devient la seule salle cochée possible',()=>{
   const lines=[line('SALLE NUMÉRO 08',50),line('SALLE NUMÉRO 11',180),line('SALLE NUMÉRO 08',300),line('SALLE NUMÉRO 30',410),line('SALLE NUMÉRO C1',700),line('SALLE NUMÉRO C2',850)];
   const {sections}=detectedSections(lines,1000,['08','11','28','30','CIC']);

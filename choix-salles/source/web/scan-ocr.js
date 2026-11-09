@@ -1,5 +1,4 @@
 import {retryUncertainHeadings} from './scan-heading-retry.js';
-import {readRoomResidents} from './scan-residents.js';
 import {outOfProvinceRooms} from './scan-provenance.js';
 import {createWorker,PSM} from 'tesseract.js';
 import {detectedSections,linesFromBlocks,refineHeadingLines,ROOM_IDS} from './scan-sections.js';
@@ -37,13 +36,6 @@ export async function recogniseRoomSections(image,onProgress=()=>{},expectedRoom
     // The first-pass sections are still usable if an isolated heading cannot be read.
   }
   const result = detectedSections(lines,canvas.height,expectedRooms);
-  let residents;
-  try {
-    await worker.setParameters({tessedit_pageseg_mode:PSM.SPARSE_TEXT});
-    residents = await readRoomResidents(worker,image,result.sections,linesFromBlocks,PSM.SINGLE_LINE,PSM.SPARSE_TEXT);
-  } catch {
-    // A failed annotation read must not prevent saving the room boundaries.
-  }
-  return {...result, residents, hpRooms: outOfProvinceRooms(lines,result.sections,image.width*scale,canvas.height)};
+  return {...result, hpRooms: outOfProvinceRooms(lines,result.sections,image.width*scale,canvas.height)};
  }finally{await worker.terminate();canvas.width=canvas.height=1}
 }
