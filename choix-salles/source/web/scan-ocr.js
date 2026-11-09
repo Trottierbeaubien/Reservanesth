@@ -32,7 +32,7 @@ export async function recogniseRoomSections(image,onProgress=()=>{}){
   await worker.setParameters({tessedit_pageseg_mode:PSM.SINGLE_LINE});
   await refineHeadingLines(worker,canvas,canvas.width,canvas.height,lines);
   try {
-    await retryUncertainHeadings(worker,image,lines,image.width*scale,canvas.height,PSM.SINGLE_LINE);
+    await retryUncertainHeadings(worker,image,lines,image.width*scale,canvas.height,PSM.SINGLE_LINE,PSM.SINGLE_WORD);
   } catch {
     // The first-pass sections are still usable if an isolated heading cannot be read.
   }
