@@ -67,7 +67,49 @@ export function transition(current:Programme,raw:unknown,email:string,now=Date.n
   manager();if(!d.scan||body.scanId!==d.scan.key||!ROOM_IDS.includes(body.room)||body.crop[1]-body.crop[0]<.001)fail('Repères invalides ou programme remplacé.');if((d.sections?.[body.room]?.length||0)>1)fail('Rechargez l’application pour modifier une salle fusionnée.');d.crops[body.room]=body.crop;d.sections??={};d.sections[body.room]=[body.crop];d.scan.hpRooms=d.scan.hpRooms?.filter(id=>id!==body.room);if(d.scan.residents)delete d.scan.residents[body.room];
  }else if(body.action==='sections'||body.action==='roomSections'){
   manager();if(!d.scan||d.scan.key!==body.scanId)fail('Le programme a été remplacé. Relancez le repérage.',409);
-  if(body.action==='sections'){d.sections=body.sections;d.scan.roomDetectionDone=true;d.scan.roomDetectionVersion=2;d.crops=Object.fromEntries(Object.entries(body.sections).map(([id,parts])=>[id,parts[0]]));const recognised=ROOM_IDS.filter(id=>body.sections[id as keyof typeof body.sections]?.length);d.openRooms=ROOM_IDS.filter(id=>recognised.includes(id)||!!d.assignments[id]);d.scan.hpRooms=recognised.filter(id=>body.hpRooms?.includes(id));if(body.residents)d.scan.residents=Object.fromEntries(Object.entries(body.residents).filter(([id])=>recognised.includes(id)).map(([id,tags])=>[id,[...new Set(tags)]]))}else{if(!ROOM_IDS.includes(body.room))fail('Salle invalide.');d.sections??={};d.sections[body.room]=body.sections;d.crops[body.room]=body.sections[0];d.scan.hpRooms=d.scan.hpRooms?.filter(id=>id!==body.room);if(d.scan.residents)delete d.scan.residents[body.room]}
+  if(body.action==='sections'){
+   const detected: Record<string,[number,number][]> = body.sections;
+   const verified = d.scan.verifiedSections || {};
+   const changedRooms = new Set<string>();
+   for (const [room, confirmedBands] of Object.entries(verified)) {
+    for (const [other, bands] of Object.entries(detected)) {
+     if (other === room) continue;
+     let remaining = bands;
+     for (const [left, right] of confirmedBands) {
+      remaining = remaining.flatMap(([start,end]): [number,number][] => {
+       if (end <= left || start >= right) return [[start,end]];
+       changedRooms.add(other);
+       const pieces: [number,number][] = [];
+       if (left-start >= .001) pieces.push([start,left]);
+       if (end-right >= .001) pieces.push([right,end]);
+       return pieces;
+      });
+     }
+     if (remaining.length) detected[other]=remaining;
+     else delete detected[other];
+    }
+    if (JSON.stringify(detected[room]) !== JSON.stringify(confirmedBands)) changedRooms.add(room);
+    detected[room]=confirmedBands;
+   }
+   d.sections=detected;
+   d.scan.roomDetectionDone=true;
+   d.scan.roomDetectionVersion=2;
+   d.crops=Object.fromEntries(Object.entries(detected).map(([id,parts])=>[id,parts[0]]));
+   const recognised=ROOM_IDS.filter(id=>detected[id]?.length);
+   d.openRooms=ROOM_IDS.filter(id=>recognised.includes(id)||!!d.assignments[id]);
+   d.scan.hpRooms=recognised.filter(id=>body.hpRooms?.includes(id)&&!changedRooms.has(id));
+   if(body.residents) d.scan.residents=Object.fromEntries(Object.entries(body.residents)
+    .filter(([id])=>recognised.includes(id)&&!changedRooms.has(id))
+    .map(([id,tags])=>[id,[...new Set(tags)]]));
+  }else{
+   if(!ROOM_IDS.includes(body.room))fail('Salle invalide.');
+   d.sections??={};
+   d.sections[body.room]=body.sections;
+   d.crops[body.room]=body.sections[0];
+   d.scan.hpRooms=d.scan.hpRooms?.filter(id=>id!==body.room);
+   if(d.scan.residents)delete d.scan.residents[body.room];
+   if(d.scan.verifiedSections?.[body.room])d.scan.verifiedSections[body.room]=body.sections;
+  }
  }else if(body.action==='reset'){
   manager();if(previous&&d.roundStart)event(person(d,previous)?.email||'','assignment','Nouvelle ronde','La ronde précédente est terminée. Votre choix précédent n’est plus en attente.');const directory=d.directory,testMode=d.testMode,testRecipient=d.testRecipient;Object.assign(d,initial(),{directory,testMode,testRecipient,sections:{}});
  }else if(body.action==='remind'){

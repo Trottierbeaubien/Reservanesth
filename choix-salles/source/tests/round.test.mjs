@@ -55,3 +55,15 @@ test('une seule affectation possible à l’ouverture fonctionne aussi en essai'
   assert.ok(result.events.some(e=>e.kind==='assignment'&&e.body.includes('Clinique préop')));
   assert.ok(result.events.every(e=>e.email===leader));
 });
+
+test('un nouveau repérage du même scan préserve une section vérifiée',()=>{
+  const d=sample();
+  d.scan.verifiedSections={'28':[[.24,.34]]};
+  const result=go(d,{action:'sections',scanId:d.scan.key,
+    sections:{'08':[[.05,.16],[.24,.34]],'11':[[.16,.24]],'30':[[.34,.41]]},
+    residents:{'08':['R1']}});
+  assert.deepEqual(result.data.sections['08'],[[.05,.16]]);
+  assert.deepEqual(result.data.sections['28'],[[.24,.34]]);
+  assert.ok(result.data.openRooms.includes('28'));
+  assert.equal(result.data.scan.residents['08'],undefined);
+});
