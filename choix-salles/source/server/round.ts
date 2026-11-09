@@ -1,5 +1,5 @@
 import {z} from 'zod';
-import {initial,ROOM_IDS,CHOICE_IDS,availableChoices,choiceLabel,RESIDENT_LEVELS,NOTES,canManage,nextChooser,person,eligible,sortDirectory,type Programme} from './model.ts';
+import {initial,ROOM_IDS,CHOICE_IDS,availableChoices,choiceLabel,RESIDENT_LEVELS,roomsConfirmed,NOTES,canManage,nextChooser,person,eligible,sortDirectory,type Programme} from './model.ts';
 const section=z.tuple([z.number().min(0).max(1),z.number().min(0).max(1)]).refine(([a,b])=>b-a>=.001);
 const id=z.string().regex(/^[a-zA-Z0-9_-]{1,80}$/);
 const address=z.union([z.literal(''),z.string().email().max(254)]);
@@ -31,7 +31,7 @@ export function transition(current:Programme,raw:unknown,email:string,now=Date.n
   if(new Set(ranked).size!==ranked.length)fail('Une personne ne peut figurer qu’une seule fois dans les rangs.');
   if(ranked.some(p=>!ids.includes(p))||Object.values(s.roles).some(p=>p&&!ids.includes(p)))fail('Une affectation désigne une personne absente de la liste d’équipe.');
   const day=new Date(s.date+'T12:00:00Z');if(Number.isNaN(day.valueOf())||day.toISOString().slice(0,10)!==s.date)fail('La date est invalide.');
-  Object.assign(d,s,{directory:sortDirectory(s.directory).map(p=>({...p,email:p.email.toLowerCase()})),openRooms:[...new Set(s.openRooms)],assignments:{},delays:{},audit:[],roundOwner:'',roundId:'',roundStart:0,lastChoice:0});
+  Object.assign(d,s,{directory:sortDirectory(s.directory).map(p=>({...p,email:p.email.toLowerCase()})),openRooms:ROOM_IDS.filter(id=>s.openRooms.includes(id as typeof s.openRooms[number])),openRoomsConfirmed:true,assignments:{},delays:{},audit:[],roundOwner:'',roundId:'',roundStart:0,lastChoice:0});
   d.testMode=body.setup.testMode??current.testMode??false;d.testRecipient=d.testMode?(current.testRecipient||email):'';d.roles.preop='';
  }else if(body.action==='start'){
   if(d.roundStart)fail('La ronde a déjà été démarrée.',409);
@@ -104,7 +104,7 @@ export function transition(current:Programme,raw:unknown,email:string,now=Date.n
    d.scan.roomDetectionVersion=2;
    d.crops=Object.fromEntries(Object.entries(detected).map(([id,parts])=>[id,parts[0]]));
    const recognised=ROOM_IDS.filter(id=>detected[id]?.length);
-   d.openRooms=ROOM_IDS.filter(id=>recognised.includes(id)||!!d.assignments[id]);
+   if(!roomsConfirmed(d))d.openRooms=ROOM_IDS.filter(id=>recognised.includes(id)||!!d.assignments[id]);
    d.scan.hpRooms=recognised.filter(id=>body.hpRooms?.includes(id)&&!changedRooms.has(id));
    if(body.residents) d.scan.residents=Object.fromEntries(Object.entries(body.residents)
     .filter(([id])=>recognised.includes(id)&&!changedRooms.has(id))

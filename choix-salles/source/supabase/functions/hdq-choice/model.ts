@@ -5,9 +5,9 @@ export const RESIDENT_LEVELS=['R1','R2','R3','R4','R5','EXT'] as const;
 export const NOTES=['','Absent','académique','administratif','CMS'];
 export type Person={id:string,name:string,email:string};
 export type Rank={personId:string,note:string};
-export type Programme={schemaVersion:2,date:string,directory:Person[],roomResidents?:Record<string,string>,ranks:Rank[],openRooms:string[],roles:Record<string,string>,clinicOpen:boolean,assignments:Record<string,string>,crops:Record<string,[number,number]>,sections?:Record<string,[number,number][]>,testMode?:boolean,testRecipient?:string,scan:null|{key:string,type:string,updatedAt:number,roomDetectionDone?:boolean,roomDetectionVersion?:number,hpRooms?:string[],residents?:Record<string,string[]>,verifiedSections?:Record<string,[number,number][]>},roundStart:number,lastChoice:number,roundOwner:string,roundId:string,delays:Record<string,number>,audit:{at:number,actor:string,personId:string,room:string,delegated:boolean,automatic?:boolean}[],lastReminder:number,lastMutationId:string,previousDemoAssignments?:unknown};
+export type Programme={schemaVersion:2,date:string,directory:Person[],roomResidents?:Record<string,string>,ranks:Rank[],openRooms:string[],openRoomsConfirmed?:boolean,roles:Record<string,string>,clinicOpen:boolean,assignments:Record<string,string>,crops:Record<string,[number,number]>,sections?:Record<string,[number,number][]>,testMode?:boolean,testRecipient?:string,scan:null|{key:string,type:string,updatedAt:number,roomDetectionDone?:boolean,roomDetectionVersion?:number,hpRooms?:string[],residents?:Record<string,string[]>,verifiedSections?:Record<string,[number,number][]>},roundStart:number,lastChoice:number,roundOwner:string,roundId:string,delays:Record<string,number>,audit:{at:number,actor:string,personId:string,room:string,delegated:boolean,automatic?:boolean}[],lastReminder:number,lastMutationId:string,previousDemoAssignments?:unknown};
 export function initial():Programme{
- return {schemaVersion:2,date:new Intl.DateTimeFormat('en-CA',{timeZone:'America/Toronto',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(Date.now()+86400000)),directory:[],roomResidents:{},ranks:Array.from({length:14},()=>({personId:'',note:''})),openRooms:ROOM_IDS.filter(r=>!['09','CIC'].includes(r)),roles:{garde:'',veineux:'',hbo:'',preop:''},clinicOpen:false,assignments:{},crops:{},scan:null,roundStart:0,lastChoice:0,roundOwner:'',roundId:'',delays:{},audit:[],lastReminder:0,lastMutationId:''};
+ return {schemaVersion:2,date:new Intl.DateTimeFormat('en-CA',{timeZone:'America/Toronto',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(Date.now()+86400000)),directory:[],roomResidents:{},ranks:Array.from({length:14},()=>({personId:'',note:''})),openRoomsConfirmed:false,openRooms:ROOM_IDS.filter(r=>!['09','CIC'].includes(r)),roles:{garde:'',veineux:'',hbo:'',preop:''},clinicOpen:false,assignments:{},crops:{},scan:null,roundStart:0,lastChoice:0,roundOwner:'',roundId:'',delays:{},audit:[],lastReminder:0,lastMutationId:''};
 }
 export function normalize(data:any):Programme{
  if(data?.schemaVersion===2)return data;
@@ -23,3 +23,7 @@ export function personLabel(p:{name:string}){const words=p.name.trim().split(/\s
 export function sortDirectory<T extends {name:string}>(people:T[]):T[]{return people.slice().sort((a,b)=>!a.name.trim()?1:!b.name.trim()?-1:nameCollator.compare(personLabel(a),personLabel(b)))}
 
 export function availableChoices(d:Programme){return [...d.openRooms.filter(id=>ROOM_IDS.includes(id)),...(d.clinicOpen?['PREOP']:[])]}
+
+export function roomsConfirmed(d:Programme){
+ return d.openRoomsConfirmed ?? d.ranks.some(rank=>Boolean(rank.personId));
+}
