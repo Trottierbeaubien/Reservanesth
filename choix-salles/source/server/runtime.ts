@@ -101,9 +101,15 @@ export function createHandler(settings:{supabaseUrl:string,serviceKey:string,bre
     const summary=await makePdf(s.data,false);let image:Uint8Array|undefined;if(s.data.scan)image=new Uint8Array(await must(await db.storage.from('hdq-programmes').download(s.data.scan.key)).arrayBuffer());const full=await makePdf(s.data,true,image);
     const content=(bytes:Uint8Array)=>{let out='';for(let i=0;i<bytes.length;i+=8192)out+=String.fromCharCode(...bytes.subarray(i,i+8192));return btoa(out)};
     const recipients=[{to:mail.to,cc:mail.cc,bytes:summary,label:''},{to:mail.fullTo,cc:mail.fullCc,bytes:full,label:' (COMPLET)'}];
-    let sent=0;let refusal='';try{for(const r of recipients){const response=await fetch('https://api.brevo.com/v3/smtp/email',{method:'POST',headers:{'api-key':mail.apiKey,'Content-Type':'application/json'},body:JSON.stringify({sender:{email:mail.senderEmail,name:mail.senderName||'Anesthésiologie HDQ'},to:r.to.map((email:string)=>({email})),...(r.cc.length?{cc:r.cc.map((email:string)=>({email}))}:{}),subject:(s.data.testMode?'ESSAI — ':'')+'Planification des effectifs – Anesthésiologie – '+s.data.date+r.label,textContent:'Bonjour,\n\nVeuillez trouver ci-joint la planification des effectifs en anesthésiologie pour le '+s.data.date+'.\n\nService d’Anesthésiologie – Hôtel-Dieu de Québec',attachment:[{content:content(r.bytes),name:'HDQ_'+s.data.date+(r.label?'_complet':'')+'.pdf'}],headers:{'idempotencyKey':id+'-'+sent}}),signal:AbortSignal.timeout(15000)});if(!response.ok){
+    let sent=0;let refusal='';let provider: {status:number;code:string;message:string}|undefined;try{for(const r of recipients){const response=await fetch('https://api.brevo.com/v3/smtp/email',{method:'POST',headers:{'api-key':mail.apiKey,'Content-Type':'application/json'},body:JSON.stringify({sender:{email:mail.senderEmail,name:mail.senderName||'Anesthésiologie HDQ'},to:r.to.map((email:string)=>({email})),...(r.cc.length?{cc:r.cc.map((email:string)=>({email}))}:{}),subject:(s.data.testMode?'ESSAI — ':'')+'Planification des effectifs – Anesthésiologie – '+s.data.date+r.label,textContent:'Bonjour,\n\nVeuillez trouver ci-joint la planification des effectifs en anesthésiologie pour le '+s.data.date+'.\n\nService d’Anesthésiologie – Hôtel-Dieu de Québec',attachment:[{content:content(r.bytes),name:'HDQ_'+s.data.date+(r.label?'_complet':'')+'.pdf'}],headers:{'idempotencyKey':id+'-'+sent}}),signal:AbortSignal.timeout(15000)});if(!response.ok){
       const problem=await response.json().catch(()=>({}));
       const description=String(problem?.message||'');
+      const safeDescription=description.split(mail.apiKey).join('[clé masquée]')
+       .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi,'[adresse]')
+       .replace(/\b\d{1,3}(?:\.\d{1,3}){3}\b/g,'[IP]')
+       .replace(/[A-Za-z0-9_+/=-]{40,}/g,'[valeur masquée]')
+       .replace(/[\u0000-\u001f\u007f]+/g,' ').trim().slice(0,220);
+      provider={status:response.status,code:String(problem?.code||'').replace(/[^a-z0-9_-]/gi,'').slice(0,50),message:safeDescription};
       if (/sender|expéditeur/i.test(description)) {
        refusal='Brevo a refusé l’adresse d’expéditeur. Vérifiez-la dans Brevo.';
       } else if (response.status===401 || response.status===403) {
@@ -116,7 +122,7 @@ export function createHandler(settings:{supabaseUrl:string,serviceKey:string,bre
         'Brevo a refusé l’envoi (code '+response.status+').';
       }
       throw Error('Email request failed');
-    }sent++;await db.from('hdq_deliveries').update({detail:{sent}}).eq('id',id)}await db.from('hdq_deliveries').update({status:'sent'}).eq('id',id);return reply({ok:true,sent})}catch{await db.from('hdq_deliveries').update({status:'needs-review',detail:{sent}}).eq('id',id);return reply({error:(refusal?refusal+' ':'')+'Envois confirmés : '+sent+'/2. Vérifiez Brevo avant de réessayer.'},502)}
+    }sent++;await db.from('hdq_deliveries').update({detail:{sent}}).eq('id',id)}await db.from('hdq_deliveries').update({status:'sent'}).eq('id',id);return reply({ok:true,sent})}catch{await db.from('hdq_deliveries').update({status:'needs-review',detail:{sent,provider}}).eq('id',id);return reply({error:(refusal?refusal+' ':'')+(provider?.message?'Motif Brevo : '+provider.message+' ':'')+'Envois confirmés : '+sent+'/2.'},502)}
    }
    const s=await state();if(body.revision!==s.revision)return reply({error:'La ronde a changé. Actualisez et réessayez.'},409);
    if(s.data.testMode&&s.data.testRecipient!==email)return reply({error:'Cet essai est réservé au coordonnateur.'},403);if(body.action==='prepare'&&typeof body.setup?.testMode==='boolean'&&body.setup.testMode!==!!s.data.testMode&&!membership[0].is_owner)return reply({error:'Seul le propriétaire peut changer le mode essai.'},403);
