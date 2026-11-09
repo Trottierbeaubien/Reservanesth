@@ -10,3 +10,22 @@ test('aucune division arbitraire si une salle n’a pas été repérée',()=>{as
 test('repérage automatique du scan déjà chargé, même avec des sections partielles',async()=>{const {needsAutomaticRoomDetection}=await import('../web/scan-auto.js');const data={scan:{key:'current.jpg'},sections:{'08':[[0,.1]]}};const attempted=new Set();assert.equal(needsAutomaticRoomDetection(data,true,attempted),true);assert.equal(needsAutomaticRoomDetection(data,false,attempted),false);attempted.add('current.jpg');assert.equal(needsAutomaticRoomDetection(data,true,attempted),false);data.scan={key:'new.jpg'};assert.equal(needsAutomaticRoomDetection(data,true,attempted),true);data.scan.roomDetectionDone=true;assert.equal(needsAutomaticRoomDetection(data,true,attempted),true);data.scan.roomDetectionVersion=2;assert.equal(needsAutomaticRoomDetection(data,true,attempted),false)});
 test('C2 et C3 font deux bandes de la même salle CIC',()=>{const r=detectedSections([line('SALLE NUMÉRO 08',100),line('SALLE NUMÉRO C2',300),line('SALLE NUMÉRO C3',700)],1000);assert.equal(r.sections.CIC.length,2);assert.equal(Object.keys(r.sections).length,2)});
 test('les deux lectures du même en-tête ne créent pas deux bandes',()=>{const r=detectedSections([line('SALLE NUMÉRO C2',300,325),{...line('SALLE NUMÉRO C2',303,323),confidence:99},line('SALLE NUMÉRO 08',600)],1000);assert.equal(r.sections.CIC.length,1);assert.equal(r.headings.length,2)});
+
+test('C1 relue comme CI se fusionne avec C2 sous CIC',()=>{
+  const sections=detectedSections([line('SALLE NUMÉRO CI',100),line('SALLE NUMÉRO C2',450)],1000).sections;
+  assert.equal(sections.CIC.length,2);
+});
+
+test('un en-tête C1 mal lu est relu et fusionné avec le bloc C2',async()=>{
+  const {retryUncertainHeadings}=await import('../web/scan-heading-retry.js');
+  const lines=[line('SALLE NUMÉRO 48',700),line('SALLE NUMÉRO 01',810),line('SALLE NUMÉRO C2',900)];
+  const savedDocument=globalThis.document;
+  globalThis.document={createElement:()=>({getContext:()=>({drawImage(){}})})};
+  try {
+    const worker={setParameters:async()=>{},recognize:async()=>({data:{text:'SALLE NUMERO C1',confidence:94}})};
+    await retryUncertainHeadings(worker,{width:1000,height:1000},lines,1000,1000,7);
+    assert.equal(detectedSections(lines,1000).sections.CIC.length,2);
+  } finally {
+    globalThis.document=savedDocument;
+  }
+});

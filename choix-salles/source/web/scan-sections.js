@@ -1,6 +1,6 @@
 // Only printed room headings and their positions are retained; case text is discarded.
 export const ROOM_IDS=['08','09','11','28','30','34','40','42','46','48','CIC'];
-export function roomId(token){const value=String(token).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/\s+/g,'');if(/^(?:C\d*|CIC|CURIETHERAPIE)$/.test(value))return 'CIC';const numeric=value.replace(/O/g,'0').replace(/[IL]/g,'1');if(/^\d{1,2}$/.test(numeric)){const n=String(Number(numeric)).padStart(2,'0');return ROOM_IDS.includes(n)?n:null}return null}
+export function roomId(token){const value=String(token).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/\s+/g,'');if(/^(?:C\d*|C[IL]|CIC|CURIETHERAPIE)$/.test(value))return 'CIC';const numeric=value.replace(/O/g,'0').replace(/[IL]/g,'1');if(/^\d{1,2}$/.test(numeric)){const n=String(Number(numeric)).padStart(2,'0');return ROOM_IDS.includes(n)?n:null}return null}
 export function parseHeading(text){const normalized=String(text).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/[º°]/g,'O').replace(/[^A-Z0-9\s]/g,' ');const match=normalized.match(/\bSALLE\s*(?:NUM[E3]R[O0]|N\s*O)\s*([A-Z][A-Z0-9]*|\d{1,2}[A-Z]?)\b/);if(!match)return null;return {label:match[1],room:roomId(match[1])}}
 export function detectedSections(lines,height){
  if(!Number.isFinite(height)||height<=0)return {sections:{},headings:[]};

@@ -1,4 +1,4 @@
-import {retryDuplicateHeadings} from './scan-heading-retry.js';
+import {retryUncertainHeadings} from './scan-heading-retry.js';
 import {readRoomResidents} from './scan-residents.js';
 import {outOfProvinceRooms} from './scan-provenance.js';
 import {createWorker,PSM} from 'tesseract.js';
@@ -32,7 +32,7 @@ export async function recogniseRoomSections(image,onProgress=()=>{}){
   await worker.setParameters({tessedit_pageseg_mode:PSM.SINGLE_LINE});
   await refineHeadingLines(worker,canvas,canvas.width,canvas.height,lines);
   try {
-    await retryDuplicateHeadings(worker,image,lines,image.width*scale,canvas.height,PSM.SINGLE_LINE);
+    await retryUncertainHeadings(worker,image,lines,image.width*scale,canvas.height,PSM.SINGLE_LINE);
   } catch {
     // The first-pass sections are still usable if an isolated heading cannot be read.
   }

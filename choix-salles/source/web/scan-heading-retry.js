@@ -1,20 +1,20 @@
 import {detectedSections, parseHeading} from './scan-sections.js';
 
-export async function retryDuplicateHeadings(worker, image, lines, width, height, singleLineMode) {
+export async function retryUncertainHeadings(worker, image, lines, width, height, singleLineMode) {
   const {headings} = detectedSections(lines,height);
   const counts = new Map();
   for (const {room} of headings) {
     if (room && room !== 'CIC') counts.set(room,(counts.get(room) || 0)+1);
   }
-  if (![...counts.values()].some(count => count > 1)) return;
+  const uncertain = headings.filter(({room}) => !room || (counts.get(room) || 0) > 1);
+  if (!uncertain.length) return;
 
   const canvas = document.createElement('canvas');
   const context = canvas.getContext('2d');
   const used = new Set(counts.keys());
   try {
     await worker.setParameters({tessedit_pageseg_mode:singleLineMode});
-    for (const heading of headings) {
-      if ((counts.get(heading.room) || 0) < 2) continue;
+    for (const heading of uncertain) {
       const nearby = lines.filter(({text,bbox}) => bbox && parseHeading(text) &&
         Math.abs(bbox.y0-heading.y*height) <= Math.max(8,(bbox.y1-bbox.y0)*.8));
       if (!nearby.length) continue;
@@ -32,7 +32,11 @@ export async function retryDuplicateHeadings(worker, image, lines, width, height
       context.drawImage(image,left,top,right-left,bottom-top,0,0,canvas.width,canvas.height);
       const {data} = await worker.recognize(canvas,{}, {text:true,blocks:false});
       const corrected = parseHeading(data.text);
-      if (!corrected?.room || used.has(corrected.room) || corrected.room === 'CIC' || data.confidence < 75) continue;
+      const minimumConfidence = /^(?:1|I|L)F$/.test(heading.label) ? 90 : 75;
+      if (!corrected?.room || !Number.isFinite(data.confidence) || data.confidence < minimumConfidence) continue;
+      // CIC may include several separately printed C-room headings.
+      if (corrected.room !== 'CIC' && used.has(corrected.room)) continue;
+      if (corrected.room === 'CIC' && !/^C(?:[0-9]+|IC|URIETHERAPIE)$/.test(corrected.label)) continue;
       for (const line of nearby) line.text = data.text;
       used.add(corrected.room);
     }
