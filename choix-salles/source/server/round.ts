@@ -1,9 +1,9 @@
 import {z} from 'zod';
-import {initial,ROOM_IDS,CHOICE_IDS,availableChoices,choiceLabel,NOTES,canManage,nextChooser,person,eligible,sortDirectory,type Programme} from './model.ts';
+import {initial,ROOM_IDS,CHOICE_IDS,availableChoices,choiceLabel,RESIDENT_LEVELS,NOTES,canManage,nextChooser,person,eligible,sortDirectory,type Programme} from './model.ts';
 const section=z.tuple([z.number().min(0).max(1),z.number().min(0).max(1)]).refine(([a,b])=>b-a>=.001);
 const id=z.string().regex(/^[a-zA-Z0-9_-]{1,80}$/);
 const address=z.union([z.literal(''),z.string().email().max(254)]);
-const setup=z.object({date:z.string().regex(/^\d{4}-\d{2}-\d{2}$/),directory:z.array(z.object({id,name:z.string().trim().min(1).max(100),email:address})).min(1).max(100),ranks:z.array(z.object({personId:z.string().max(80),note:z.enum(['','Absent','académique','administratif','CMS'])})).length(14),openRooms:z.array(z.enum(['08','09','11','28','30','34','40','42','46','48','CIC'])).max(11),roles:z.object({garde:z.string(),veineux:z.string(),hbo:z.string(),preop:z.string()}),clinicOpen:z.boolean(),testMode:z.boolean().optional()});
+const setup=z.object({date:z.string().regex(/^\d{4}-\d{2}-\d{2}$/),directory:z.array(z.object({id,name:z.string().trim().min(1).max(100),email:address})).min(1).max(100),ranks:z.array(z.object({personId:z.string().max(80),note:z.enum(['','Absent','académique','administratif','CMS'])})).length(14),openRooms:z.array(z.enum(['08','09','11','28','30','34','40','42','46','48','CIC'])).max(11),roles:z.object({garde:z.string(),veineux:z.string(),hbo:z.string(),preop:z.string()}),clinicOpen:z.boolean(),roomResidents:z.record(z.enum(['08','09','11','28','30','34','40','42','46','48','CIC']),z.union([z.literal(''),z.enum(RESIDENT_LEVELS)])).optional(),testMode:z.boolean().optional()});
 export const actionSchema=z.discriminatedUnion('action',[
  z.object({action:z.literal('prepare'),revision:z.number().int(),setup}),
  z.object({action:z.literal('start'),revision:z.number().int()}),
