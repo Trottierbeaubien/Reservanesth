@@ -7,6 +7,15 @@ const HOST='https://trottierbeaubien.github.io';
 const WEB_PATH=HOST+'/Reservanesth/choix-salles/';
 const b64=(bytes:Uint8Array)=>btoa(String.fromCharCode(...bytes)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
 export function validPushEndpoint(endpoint:string){try{const u=new URL(endpoint);return u.protocol==='https:'&&!u.username&&!u.password&&!u.port&&['web.push.apple.com','fcm.googleapis.com','updates.push.services.mozilla.com'].includes(u.hostname)}catch{return false}}
+async function brevoDeliveryKey(deliveryId:string, attachmentIndex:number) {
+ const input=new TextEncoder().encode(deliveryId+'-'+attachmentIndex);
+ const bytes=new Uint8Array(await crypto.subtle.digest('SHA-256',input)).slice(0,16);
+ bytes[6]=(bytes[6]&0x0f)|0x40;
+ bytes[8]=(bytes[8]&0x3f)|0x80;
+ const hex=Array.from(bytes,byte=>byte.toString(16).padStart(2,'0')).join('');
+ return [hex.slice(0,8),hex.slice(8,12),hex.slice(12,16),hex.slice(16,20),hex.slice(20)].join('-');
+}
+
 export function createHandler(settings:{supabaseUrl:string,serviceKey:string,brevoKey?:string,senderEmail?:string,senderName?:string}){
  const db=createClient(settings.supabaseUrl,settings.serviceKey,{auth:{persistSession:false,autoRefreshToken:false}});
  const must=(result:any)=>{if(result.error)throw new Error('Database operation failed');return result.data};
@@ -101,7 +110,7 @@ export function createHandler(settings:{supabaseUrl:string,serviceKey:string,bre
     const summary=await makePdf(s.data,false);let image:Uint8Array|undefined;if(s.data.scan)image=new Uint8Array(await must(await db.storage.from('hdq-programmes').download(s.data.scan.key)).arrayBuffer());const full=await makePdf(s.data,true,image);
     const content=(bytes:Uint8Array)=>{let out='';for(let i=0;i<bytes.length;i+=8192)out+=String.fromCharCode(...bytes.subarray(i,i+8192));return btoa(out)};
     const recipients=[{to:mail.to,cc:mail.cc,bytes:summary,label:''},{to:mail.fullTo,cc:mail.fullCc,bytes:full,label:' (COMPLET)'}];
-    let sent=0;let refusal='';let provider: {status:number;code:string;message:string}|undefined;try{for(const r of recipients){const response=await fetch('https://api.brevo.com/v3/smtp/email',{method:'POST',headers:{'api-key':mail.apiKey,'Content-Type':'application/json'},body:JSON.stringify({sender:{email:mail.senderEmail,name:mail.senderName||'Anesthésiologie HDQ'},to:r.to.map((email:string)=>({email})),...(r.cc.length?{cc:r.cc.map((email:string)=>({email}))}:{}),subject:(s.data.testMode?'ESSAI — ':'')+'Planification des effectifs – Anesthésiologie – '+s.data.date+r.label,textContent:'Bonjour,\n\nVeuillez trouver ci-joint la planification des effectifs en anesthésiologie pour le '+s.data.date+'.\n\nService d’Anesthésiologie – Hôtel-Dieu de Québec',attachment:[{content:content(r.bytes),name:'HDQ_'+s.data.date+(r.label?'_complet':'')+'.pdf'}],headers:{'idempotencyKey':id+'-'+sent}}),signal:AbortSignal.timeout(15000)});if(!response.ok){
+    let sent=0;let refusal='';let provider: {status:number;code:string;message:string}|undefined;try{for(const r of recipients){const response=await fetch('https://api.brevo.com/v3/smtp/email',{method:'POST',headers:{'api-key':mail.apiKey,'Content-Type':'application/json'},body:JSON.stringify({sender:{email:mail.senderEmail,name:mail.senderName||'Anesthésiologie HDQ'},to:r.to.map((email:string)=>({email})),...(r.cc.length?{cc:r.cc.map((email:string)=>({email}))}:{}),subject:(s.data.testMode?'ESSAI — ':'')+'Planification des effectifs – Anesthésiologie – '+s.data.date+r.label,textContent:'Bonjour,\n\nVeuillez trouver ci-joint la planification des effectifs en anesthésiologie pour le '+s.data.date+'.\n\nService d’Anesthésiologie – Hôtel-Dieu de Québec',attachment:[{content:content(r.bytes),name:'HDQ_'+s.data.date+(r.label?'_complet':'')+'.pdf'}],headers:{idempotencyKey:await brevoDeliveryKey(id,sent)}}),signal:AbortSignal.timeout(15000)});if(!response.ok){
       const problem=await response.json().catch(()=>({}));
       const description=String(problem?.message||'');
       const safeDescription=description.split(mail.apiKey).join('[clé masquée]')
