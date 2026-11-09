@@ -29,7 +29,72 @@ function prepareInk(source, blueOnly) {
   return {prepared,ink};
 }
 
-export async function readRoomResidents(worker, image, sections, linesFromBlocks) {
+function inkGroups({data,width,height}) {
+  const rows = new Uint32Array(height);
+  for (let y=0;y<height;y++) {
+    for (let x=0;x<width;x++) if (data[(y*width+x)*4] < 105) rows[y]++;
+  }
+  const groups = [];
+  let top = -1, last = -1;
+  for (let y=0;y<=height;y++) {
+    if (y<height && rows[y]>=2) {
+      if (top<0) top=y;
+      last=y;
+      continue;
+    }
+    if (top<0 || (y<height && y-last<=4)) continue;
+    const h = last-top+1;
+    if (h>=8 && h<=height*.55) {
+      const columns = new Uint8Array(width);
+      for(let yy=top;yy<=last;yy++) for(let x=0;x<width;x++) {
+        if(data[(yy*width+x)*4]<105) columns[x]=1;
+      }
+      let left=-1, right=-1;
+      for(let x=0;x<=width;x++) {
+        if(x<width && columns[x]) {
+          if(left<0) left=x;
+          right=x;
+          continue;
+        }
+        if(left<0 || (x<width && x-right<=Math.max(4,h*.45))) continue;
+        const w=right-left+1;
+        if(w>=h*.55 && w<=h*4) groups.push({left,top,w,h});
+        left=-1;
+      }
+    }
+    top=-1;
+  }
+  return groups;
+}
+
+async function readIsolatedInk(worker, mask, singleLineMode, sparseMode) {
+  const source=document.createElement('canvas');
+  source.width=mask.width;
+  source.height=mask.height;
+  source.getContext('2d').putImageData(mask,0,0);
+  const crop=document.createElement('canvas');
+  const context=crop.getContext('2d');
+  const tags=new Set();
+  try {
+    await worker.setParameters({tessedit_pageseg_mode:singleLineMode});
+    for (const {left,top,w,h} of inkGroups(mask).slice(0,12)) {
+      const scale=Math.max(1,70/h);
+      crop.width=Math.ceil(w*scale)+36;
+      crop.height=Math.ceil(h*scale)+36;
+      context.fillStyle='white';
+      context.fillRect(0,0,crop.width,crop.height);
+      context.drawImage(source,left,top,w,h,18,18,w*scale,h*scale);
+      const {data}=await worker.recognize(crop,{}, {text:true,blocks:false});
+      for(const tag of residentLabels([{text:data.text,confidence:data.confidence}])) tags.add(tag);
+    }
+    return tags;
+  } finally {
+    source.width=source.height=crop.width=crop.height=1;
+    await worker.setParameters({tessedit_pageseg_mode:sparseMode});
+  }
+}
+
+export async function readRoomResidents(worker, image, sections, linesFromBlocks, singleLineMode, sparseMode) {
   const canvas = document.createElement('canvas');
   const context = canvas.getContext('2d',{willReadFrequently:true});
   const left = Math.floor(image.width * .69);
@@ -51,7 +116,11 @@ export async function readRoomResidents(worker, image, sections, linesFromBlocks
           if (ink < 12) continue;
           context.putImageData(prepared,0,0);
           const output = await worker.recognize(canvas, {}, {blocks:true, text:false});
-          for (const label of residentLabels(linesFromBlocks(output.data.blocks))) tags.add(label);
+          const detected=residentLabels(linesFromBlocks(output.data.blocks));
+          for (const label of detected) tags.add(label);
+          if (blueOnly && !detected.length) {
+            for (const label of await readIsolatedInk(worker,prepared,singleLineMode,sparseMode)) tags.add(label);
+          }
         }
       }
       if (tags.size) result[room] = [...tags].sort();

@@ -40,7 +40,7 @@ export async function recogniseRoomSections(image,onProgress=()=>{}){
   let residents;
   try {
     await worker.setParameters({tessedit_pageseg_mode:PSM.SPARSE_TEXT});
-    residents = await readRoomResidents(worker,image,result.sections,linesFromBlocks);
+    residents = await readRoomResidents(worker,image,result.sections,linesFromBlocks,PSM.SINGLE_LINE,PSM.SPARSE_TEXT);
   } catch {
     // A failed annotation read must not prevent saving the room boundaries.
   }
