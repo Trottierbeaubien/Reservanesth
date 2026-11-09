@@ -101,7 +101,7 @@ export function createHandler(settings:{supabaseUrl:string,serviceKey:string,bre
     const summary=await makePdf(s.data,false);let image:Uint8Array|undefined;if(s.data.scan)image=new Uint8Array(await must(await db.storage.from('hdq-programmes').download(s.data.scan.key)).arrayBuffer());const full=await makePdf(s.data,true,image);
     const content=(bytes:Uint8Array)=>{let out='';for(let i=0;i<bytes.length;i+=8192)out+=String.fromCharCode(...bytes.subarray(i,i+8192));return btoa(out)};
     const recipients=[{to:mail.to,cc:mail.cc,bytes:summary,label:''},{to:mail.fullTo,cc:mail.fullCc,bytes:full,label:' (COMPLET)'}];
-    let sent=0;let refusal='';try{for(const r of recipients){const response=await fetch('https://api.brevo.com/v3/smtp/email',{method:'POST',headers:{'api-key':mail.apiKey,'Content-Type':'application/json'},body:JSON.stringify({sender:{email:mail.senderEmail,name:mail.senderName||'Anesthésiologie HDQ'},to:r.to.map((email:string)=>({email})),cc:r.cc.map((email:string)=>({email})),subject:(s.data.testMode?'ESSAI — ':'')+'Planification des effectifs – Anesthésiologie – '+s.data.date+r.label,textContent:'Bonjour,\n\nVeuillez trouver ci-joint la planification des effectifs en anesthésiologie pour le '+s.data.date+'.\n\nService d’Anesthésiologie – Hôtel-Dieu de Québec',attachment:[{content:content(r.bytes),name:'HDQ_'+s.data.date+(r.label?'_complet':'')+'.pdf'}],headers:{'idempotencyKey':id+'-'+sent}}),signal:AbortSignal.timeout(15000)});if(!response.ok){
+    let sent=0;let refusal='';try{for(const r of recipients){const response=await fetch('https://api.brevo.com/v3/smtp/email',{method:'POST',headers:{'api-key':mail.apiKey,'Content-Type':'application/json'},body:JSON.stringify({sender:{email:mail.senderEmail,name:mail.senderName||'Anesthésiologie HDQ'},to:r.to.map((email:string)=>({email})),...(r.cc.length?{cc:r.cc.map((email:string)=>({email}))}:{}),subject:(s.data.testMode?'ESSAI — ':'')+'Planification des effectifs – Anesthésiologie – '+s.data.date+r.label,textContent:'Bonjour,\n\nVeuillez trouver ci-joint la planification des effectifs en anesthésiologie pour le '+s.data.date+'.\n\nService d’Anesthésiologie – Hôtel-Dieu de Québec',attachment:[{content:content(r.bytes),name:'HDQ_'+s.data.date+(r.label?'_complet':'')+'.pdf'}],headers:{'idempotencyKey':id+'-'+sent}}),signal:AbortSignal.timeout(15000)});if(!response.ok){
       const problem=await response.json().catch(()=>({}));
       const description=String(problem?.message||'');
       if (/sender|expéditeur/i.test(description)) {
@@ -109,7 +109,11 @@ export function createHandler(settings:{supabaseUrl:string,serviceKey:string,bre
       } else if (response.status===401 || response.status===403) {
        refusal='Brevo a refusé la connexion. Vérifiez que la clé API autorise l’envoi de courriels transactionnels.';
       } else {
-       refusal='Brevo a refusé l’envoi (code '+response.status+').';
+       const fields: [RegExp,string][]=[[/\bcc\b/i,'copie'],[/\battachment\b/i,'pièce jointe'],
+        [/idempotency/i,'identifiant d’envoi'],[/\brecipient\b|\bto\b/i,'destinataire']];
+       const field=fields.find(([pattern])=>pattern.test(description));
+       refusal=field?'Brevo a refusé le champ « '+field[1]+' ».':
+        'Brevo a refusé l’envoi (code '+response.status+').';
       }
       throw Error('Email request failed');
     }sent++;await db.from('hdq_deliveries').update({detail:{sent}}).eq('id',id)}await db.from('hdq_deliveries').update({status:'sent'}).eq('id',id);return reply({ok:true,sent})}catch{await db.from('hdq_deliveries').update({status:'needs-review',detail:{sent}}).eq('id',id);return reply({error:(refusal?refusal+' ':'')+'Envois confirmés : '+sent+'/2. Vérifiez Brevo avant de réessayer.'},502)}
