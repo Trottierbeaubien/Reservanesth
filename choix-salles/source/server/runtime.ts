@@ -87,14 +87,32 @@ export function createHandler(settings:{supabaseUrl:string,serviceKey:string,bre
     const mail=await mailSettings();const s=await state();if(s.data.testMode){mail.to=[s.data.testRecipient!];mail.cc=[];mail.fullTo=[s.data.testRecipient!];mail.fullCc=[]}if(!s.data.roundStart||s.data.roundOwner!==email)return reply({error:'Seul le responsable de la ronde peut envoyer les PDF.'},403);
     if(nextChooser(s.data))return reply({error:'Attendez la fin des choix avant d’envoyer les PDF.'},409);
     if(!mail.apiKey||!mail.senderEmail||!mail.to.length||!mail.fullTo.length)return reply({error:'Brevo doit être configuré côté serveur avant l’envoi. Les PDF peuvent déjà être téléchargés.'},503);
-    const id=s.data.roundId+'-'+s.revision;const last=must(await db.from('hdq_deliveries').select('id,status,created_at').order('created_at',{ascending:false}).limit(1));
+    const id=s.data.roundId+'-'+s.revision;const last=must(await db.from('hdq_deliveries').select('id,status,created_at,detail').order('created_at',{ascending:false}).limit(1));
     if(last[0]?.id===id&&last[0]?.status==='sent')return reply({error:'Ces PDF ont déjà été envoyés.'},409);
     if(last[0]&&Date.now()-Date.parse(last[0].created_at)<60000)return reply({error:'Attendez une minute avant un nouvel envoi.'},429);
-    const lock=await db.from('hdq_deliveries').insert({id,status:'sending'});if(lock.error)return reply({error:'Cet envoi est déjà en cours ou nécessite une vérification.'},409);
+    const retryTest = s.data.testMode && last[0]?.id === id &&
+      last[0].status === 'needs-review' && last[0].detail?.sent === 0;
+    const lock = retryTest
+      ? await db.from('hdq_deliveries').update({status:'sending',created_at:new Date().toISOString()})
+          .eq('id',id).eq('status','needs-review').select('id').maybeSingle()
+      : await db.from('hdq_deliveries').insert({id,status:'sending'});
+    if(lock.error || (retryTest && !lock.data))
+      return reply({error:'Cet envoi est déjà en cours ou nécessite une vérification.'},409);
     const summary=await makePdf(s.data,false);let image:Uint8Array|undefined;if(s.data.scan)image=new Uint8Array(await must(await db.storage.from('hdq-programmes').download(s.data.scan.key)).arrayBuffer());const full=await makePdf(s.data,true,image);
     const content=(bytes:Uint8Array)=>{let out='';for(let i=0;i<bytes.length;i+=8192)out+=String.fromCharCode(...bytes.subarray(i,i+8192));return btoa(out)};
     const recipients=[{to:mail.to,cc:mail.cc,bytes:summary,label:''},{to:mail.fullTo,cc:mail.fullCc,bytes:full,label:' (COMPLET)'}];
-    let sent=0;try{for(const r of recipients){const response=await fetch('https://api.brevo.com/v3/smtp/email',{method:'POST',headers:{'api-key':mail.apiKey,'Content-Type':'application/json'},body:JSON.stringify({sender:{email:mail.senderEmail,name:mail.senderName||'Anesthésiologie HDQ'},to:r.to.map((email:string)=>({email})),cc:r.cc.map((email:string)=>({email})),subject:(s.data.testMode?'ESSAI — ':'')+'Planification des effectifs – Anesthésiologie – '+s.data.date+r.label,textContent:'Bonjour,\n\nVeuillez trouver ci-joint la planification des effectifs en anesthésiologie pour le '+s.data.date+'.\n\nService d’Anesthésiologie – Hôtel-Dieu de Québec',attachment:[{content:content(r.bytes),name:'HDQ_'+s.data.date+(r.label?'_complet':'')+'.pdf'}],headers:{'idempotencyKey':id+'-'+sent}}),signal:AbortSignal.timeout(15000)});if(!response.ok)throw Error('Email request failed');sent++;await db.from('hdq_deliveries').update({detail:{sent}}).eq('id',id)}await db.from('hdq_deliveries').update({status:'sent'}).eq('id',id);return reply({ok:true,sent})}catch{await db.from('hdq_deliveries').update({status:'needs-review',detail:{sent}}).eq('id',id);return reply({error:'L’envoi n’est pas entièrement confirmé ('+sent+'/2). Vérifiez Brevo avant de réessayer pour éviter les doublons.'},502)}
+    let sent=0;let refusal='';try{for(const r of recipients){const response=await fetch('https://api.brevo.com/v3/smtp/email',{method:'POST',headers:{'api-key':mail.apiKey,'Content-Type':'application/json'},body:JSON.stringify({sender:{email:mail.senderEmail,name:mail.senderName||'Anesthésiologie HDQ'},to:r.to.map((email:string)=>({email})),cc:r.cc.map((email:string)=>({email})),subject:(s.data.testMode?'ESSAI — ':'')+'Planification des effectifs – Anesthésiologie – '+s.data.date+r.label,textContent:'Bonjour,\n\nVeuillez trouver ci-joint la planification des effectifs en anesthésiologie pour le '+s.data.date+'.\n\nService d’Anesthésiologie – Hôtel-Dieu de Québec',attachment:[{content:content(r.bytes),name:'HDQ_'+s.data.date+(r.label?'_complet':'')+'.pdf'}],headers:{'idempotencyKey':id+'-'+sent}}),signal:AbortSignal.timeout(15000)});if(!response.ok){
+      const problem=await response.json().catch(()=>({}));
+      const description=String(problem?.message||'');
+      if (/sender|expéditeur/i.test(description)) {
+       refusal='Brevo a refusé l’adresse d’expéditeur. Vérifiez-la dans Brevo.';
+      } else if (response.status===401 || response.status===403) {
+       refusal='Brevo a refusé la connexion. Vérifiez que la clé API autorise l’envoi de courriels transactionnels.';
+      } else {
+       refusal='Brevo a refusé l’envoi (code '+response.status+').';
+      }
+      throw Error('Email request failed');
+    }sent++;await db.from('hdq_deliveries').update({detail:{sent}}).eq('id',id)}await db.from('hdq_deliveries').update({status:'sent'}).eq('id',id);return reply({ok:true,sent})}catch{await db.from('hdq_deliveries').update({status:'needs-review',detail:{sent}}).eq('id',id);return reply({error:(refusal?refusal+' ':'')+'Envois confirmés : '+sent+'/2. Vérifiez Brevo avant de réessayer.'},502)}
    }
    const s=await state();if(body.revision!==s.revision)return reply({error:'La ronde a changé. Actualisez et réessayez.'},409);
    if(s.data.testMode&&s.data.testRecipient!==email)return reply({error:'Cet essai est réservé au coordonnateur.'},403);if(body.action==='prepare'&&typeof body.setup?.testMode==='boolean'&&body.setup.testMode!==!!s.data.testMode&&!membership[0].is_owner)return reply({error:'Seul le propriétaire peut changer le mode essai.'},403);
