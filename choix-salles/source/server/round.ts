@@ -16,7 +16,7 @@ export const actionSchema=z.discriminatedUnion('action',[
  z.object({action:z.literal('remind'),revision:z.number().int()}),
 ]);
 export class RoundError extends Error{constructor(message:string,public status=400){super(message)}}
-export type Event={id:string,email:string,kind:'turn'|'assignment'|'clinic'|'progress',title:string,body:string,roundId:string,createdAt:number,badge:number,revision:number};
+export type Event={id:string,email:string,kind:'turn'|'assignment'|'clinic'|'progress'|'round-start',title:string,body:string,roundId:string,createdAt:number,badge:number,revision:number};
 function fail(message:string,status=400):never{throw new RoundError(message,status)}
 export function transition(current:Programme,raw:unknown,email:string,now=Date.now(),mutationId=crypto.randomUUID()):{data:Programme,events:Event[]}{
  const parsed=actionSchema.safeParse(raw);if(!parsed.success)fail('Données invalides. Vérifiez la préparation de la journée.');
@@ -41,6 +41,14 @@ export function transition(current:Programme,raw:unknown,email:string,now=Date.n
   const requiredEmails=d.clinicOpen?active:d.directory.map(p=>p.id);const missing=requiredEmails.filter(id=>!person(d,id)?.email);if(missing.length&&!d.testMode)fail('Complétez les adresses de connexion nécessaires aux choix et à l’appel clinique avant de démarrer.');
   if(d.testMode&&d.testRecipient!==email)fail('Cet essai est réservé à son destinataire.',403);
   d.roundOwner=email;d.roundId=mutationId;d.roundStart=now;d.lastChoice=now;d.assignments={};d.delays={};d.audit=[];
+  const startMessage = 'La ronde du '+d.date+' est ouverte. Consultez le programme et préparez votre choix.';
+  if (d.testMode) {
+   event(email,'round-start','La ronde est ouverte',startMessage);
+  } else {
+   for (const recipient of new Set(d.directory.map(p=>p.email).filter(Boolean))) {
+    event(recipient,'round-start','La ronde est ouverte',startMessage);
+   }
+  }
   if(!d.clinicOpen){const ranked=new Set(d.ranks.map(r=>r.personId)),outside=d.directory.filter(p=>!ranked.has(p.id));if(d.testMode){if(outside.length)event(email,'clinic','Clinique préop — volontaires','Essai : cet appel concerne les '+outside.length+' membres hors des rangs. Pour cet essai, seule votre adresse est avertie.')}else for(const p of outside)event(p.email,'clinic','Clinique préop — volontaires','La clinique préop n’est pas ouverte pour le '+d.date+'. Si vous souhaitez la faire, répondez par texto au groupe. Premier arrivé, premier servi; aucun choix dans l’application.');}
  }else if(body.action==='choice'){
   if(!d.roundStart)fail('La ronde n’est pas encore démarrée.',409);

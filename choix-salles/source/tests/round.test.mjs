@@ -67,3 +67,15 @@ test('un nouveau repérage du même scan préserve une section vérifiée',()=>{
   assert.ok(result.data.openRooms.includes('28'));
   assert.equal(result.data.scan.residents['08'],undefined);
 });
+
+test('le démarrage avise toute l’équipe et l’essai envoie un seul avis de préparation',()=>{
+  const d=sample();
+  const normal=go(d,{action:'start'});
+  assert.deepEqual(normal.events.filter(e=>e.kind==='round-start').map(e=>e.email).sort(),d.directory.map(p=>p.email).sort());
+  assert.equal(normal.events.filter(e=>e.kind==='turn').length,1);
+  d.testMode=true;
+  d.testRecipient=leader;
+  const trial=go(d,{action:'start'});
+  assert.equal(trial.events.filter(e=>e.kind==='round-start').length,1);
+  assert.ok(trial.events.every(e=>e.email===leader));
+});
