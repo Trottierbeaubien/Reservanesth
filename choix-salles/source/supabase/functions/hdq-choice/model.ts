@@ -1,7 +1,7 @@
 export const ROOM_IDS=['08','09','11','28','30','34','40','42','46','48','CIC'];
 export const CHOICE_IDS=[...ROOM_IDS,'PREOP'];
 export function choiceLabel(id:string){return id==='PREOP'?'Clinique préop':id==='CIC'?'CIC — Curiethérapie':'Salle '+Number(id)}
-export const RESIDENT_LEVELS=['R1','R2','R3','R4','R5','EXT'] as const;
+export const RESIDENT_LEVELS=['R1','R3','R4','R5','R ect','EXT'] as const;
 export const NOTES=['','Absent','académique','administratif','CMS'];
 export type Person={id:string,name:string,email:string};
 export type Rank={personId:string,note:string};
