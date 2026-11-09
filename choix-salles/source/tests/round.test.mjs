@@ -18,3 +18,40 @@ test('le repérage ouvre CIC et retire les salles absentes sans toucher aux rang
 test('clinique ouverte : un choix de rang, un seul titulaire et passage au suivant',()=>{let d=sample();d.clinicOpen=true;d=go(d,{action:'start'}).data;let r=go(d,{action:'choice',room:'PREOP',personId:'p0'},'p0@example.invalid');assert.equal(r.data.assignments.PREOP,'p0');assert.equal(r.data.roles.preop,'p0');assert.equal(model.nextChooser(r.data),'p2');assert.throws(()=>go(r.data,{action:'choice',room:'PREOP',personId:'p2'},'p2@example.invalid'),/déjà/);assert.equal(model.choiceLabel('PREOP'),'Clinique préop')});
 test('clinique fermée exclue du choix; la correction de sa réservation rend son tour',()=>{let d=go(sample(),{action:'start'}).data;assert.throws(()=>go(d,{action:'choice',room:'PREOP',personId:'p0'},'p0@example.invalid'),/pas ouverte/);d.clinicOpen=true;d=go(d,{action:'choice',room:'PREOP',personId:'p0'},'p0@example.invalid').data;const r=go(d,{action:'correct',room:'PREOP',personId:''});assert.equal(r.data.roles.preop,'');assert.equal(model.nextChooser(r.data),'p0')});
 test('la clinique compte comme une place supplémentaire, sans section OCR',()=>{const d=sample();d.openRooms=['08'];d.clinicOpen=true;assert.deepEqual(model.availableChoices(d),['08','PREOP']);const r=go(d,{action:'start'});assert.ok(r.data.roundStart);assert.equal(r.events.some(e=>e.kind==='clinic'),false)});
+
+test('la dernière salle est attribuée et annoncée sans tour supplémentaire',()=>{
+  const d=sample();
+  d.openRooms=['08','11'];
+  const started=go(d,{action:'start'}).data;
+  const result=go(started,{action:'choice',room:'08',personId:'p0'},'p0@example.invalid');
+  assert.deepEqual(result.data.assignments,{'08':'p0','11':'p2'});
+  assert.equal(model.nextChooser(result.data),null);
+  assert.equal(result.data.audit.at(-1).automatic,true);
+  assert.ok(result.events.some(e=>e.email==='p2@example.invalid'&&e.kind==='assignment'&&e.body.includes('Salle 11')&&e.badge===0));
+  assert.ok(!result.events.some(e=>e.kind==='turn'));
+});
+
+test('le dernier participant choisit encore si plusieurs salles restent ouvertes',()=>{
+  const d=sample();
+  d.openRooms=['08','11','28'];
+  const started=go(d,{action:'start'}).data;
+  const result=go(started,{action:'choice',room:'08',personId:'p0'},'p0@example.invalid');
+  assert.equal(model.nextChooser(result.data),'p2');
+  assert.deepEqual(result.data.assignments,{'08':'p0'});
+  assert.ok(result.events.some(e=>e.email==='p2@example.invalid'&&e.kind==='turn'));
+});
+
+test('une seule affectation possible à l’ouverture fonctionne aussi en essai',()=>{
+  const d=sample();
+  d.openRooms=[];
+  d.clinicOpen=true;
+  d.ranks[2].note='Absent';
+  d.testMode=true;
+  d.testRecipient=leader;
+  const result=go(d,{action:'start'});
+  assert.equal(result.data.assignments.PREOP,'p0');
+  assert.equal(result.data.roles.preop,'p0');
+  assert.equal(model.nextChooser(result.data),null);
+  assert.ok(result.events.some(e=>e.kind==='assignment'&&e.body.includes('Clinique préop')));
+  assert.ok(result.events.every(e=>e.email===leader));
+});

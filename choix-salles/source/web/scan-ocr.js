@@ -1,3 +1,4 @@
+import {readRoomResidents} from './scan-residents.js';
 import {outOfProvinceRooms} from './scan-provenance.js';
 import {createWorker,PSM} from 'tesseract.js';
 import {detectedSections,linesFromBlocks,refineHeadingLines} from './scan-sections.js';
@@ -30,6 +31,13 @@ export async function recogniseRoomSections(image,onProgress=()=>{}){
   await worker.setParameters({tessedit_pageseg_mode:PSM.SINGLE_LINE});
   await refineHeadingLines(worker,canvas,canvas.width,canvas.height,lines);
   const result = detectedSections(lines,canvas.height);
-  return {...result, hpRooms: outOfProvinceRooms(lines,result.sections,image.width*scale,canvas.height)};
+  let residents;
+  try {
+    await worker.setParameters({tessedit_pageseg_mode:PSM.SPARSE_TEXT});
+    residents = await readRoomResidents(worker,image,result.sections,linesFromBlocks);
+  } catch {
+    // A failed annotation read must not prevent saving the room boundaries.
+  }
+  return {...result, residents, hpRooms: outOfProvinceRooms(lines,result.sections,image.width*scale,canvas.height)};
  }finally{await worker.terminate();canvas.width=canvas.height=1}
 }

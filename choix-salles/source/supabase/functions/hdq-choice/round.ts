@@ -10,7 +10,7 @@ export const actionSchema=z.discriminatedUnion('action',[
  z.object({action:z.literal('choice'),revision:z.number().int(),room:z.string(),personId:id,delegated:z.boolean().default(false)}),
  z.object({action:z.literal('correct'),revision:z.number().int(),room:z.string(),personId:z.string().max(80)}),
  z.object({action:z.literal('crop'),revision:z.number().int(),room:z.string(),crop:z.tuple([z.number().min(0).max(1),z.number().min(0).max(1)]),scanId:z.string()}),
- z.object({action:z.literal('sections'),revision:z.number().int(),scanId:z.string(),sections:z.record(z.enum(['08','09','11','28','30','34','40','42','46','48','CIC']),z.array(section).min(1).max(50)),hpRooms:z.array(z.string()).max(11).optional()}),
+ z.object({action:z.literal('sections'),revision:z.number().int(),scanId:z.string(),sections:z.record(z.enum(['08','09','11','28','30','34','40','42','46','48','CIC']),z.array(section).min(1).max(50)),hpRooms:z.array(z.string()).max(11).optional(),residents:z.record(z.enum(['08','09','11','28','30','34','40','42','46','48','CIC']),z.array(z.enum(['R1','R2','R3','R4','R5','EXT'])).max(6)).optional()}),
  z.object({action:z.literal('roomSections'),revision:z.number().int(),scanId:z.string(),room:z.string(),sections:z.array(section).min(1).max(50)}),
  z.object({action:z.literal('reset'),revision:z.number().int()}),
  z.object({action:z.literal('remind'),revision:z.number().int()}),
@@ -64,18 +64,38 @@ export function transition(current:Programme,raw:unknown,email:string,now=Date.n
   if(old&&old!==body.personId)event(person(d,old)?.email||'','assignment','Affectation corrigée','Le responsable a retiré votre affectation à '+choiceLabel(body.room)+'. Consultez la ronde.');
   if(body.room==='PREOP')d.roles.preop=d.assignments.PREOP||'';d.audit.push({at:now,actor:email,personId:body.personId,room:body.room,delegated:true});d.lastChoice=now;
  }else if(body.action==='crop'){
-  manager();if(!d.scan||body.scanId!==d.scan.key||!ROOM_IDS.includes(body.room)||body.crop[1]-body.crop[0]<.001)fail('Repères invalides ou programme remplacé.');if((d.sections?.[body.room]?.length||0)>1)fail('Rechargez l’application pour modifier une salle fusionnée.');d.crops[body.room]=body.crop;d.sections??={};d.sections[body.room]=[body.crop];d.scan.hpRooms=d.scan.hpRooms?.filter(id=>id!==body.room);
+  manager();if(!d.scan||body.scanId!==d.scan.key||!ROOM_IDS.includes(body.room)||body.crop[1]-body.crop[0]<.001)fail('Repères invalides ou programme remplacé.');if((d.sections?.[body.room]?.length||0)>1)fail('Rechargez l’application pour modifier une salle fusionnée.');d.crops[body.room]=body.crop;d.sections??={};d.sections[body.room]=[body.crop];d.scan.hpRooms=d.scan.hpRooms?.filter(id=>id!==body.room);if(d.scan.residents)delete d.scan.residents[body.room];
  }else if(body.action==='sections'||body.action==='roomSections'){
   manager();if(!d.scan||d.scan.key!==body.scanId)fail('Le programme a été remplacé. Relancez le repérage.',409);
-  if(body.action==='sections'){d.sections=body.sections;d.scan.roomDetectionDone=true;d.scan.roomDetectionVersion=2;d.crops=Object.fromEntries(Object.entries(body.sections).map(([id,parts])=>[id,parts[0]]));const recognised=ROOM_IDS.filter(id=>body.sections[id as keyof typeof body.sections]?.length);d.openRooms=ROOM_IDS.filter(id=>recognised.includes(id)||!!d.assignments[id]);d.scan.hpRooms=recognised.filter(id=>body.hpRooms?.includes(id))}else{if(!ROOM_IDS.includes(body.room))fail('Salle invalide.');d.sections??={};d.sections[body.room]=body.sections;d.crops[body.room]=body.sections[0];d.scan.hpRooms=d.scan.hpRooms?.filter(id=>id!==body.room)}
+  if(body.action==='sections'){d.sections=body.sections;d.scan.roomDetectionDone=true;d.scan.roomDetectionVersion=2;d.crops=Object.fromEntries(Object.entries(body.sections).map(([id,parts])=>[id,parts[0]]));const recognised=ROOM_IDS.filter(id=>body.sections[id as keyof typeof body.sections]?.length);d.openRooms=ROOM_IDS.filter(id=>recognised.includes(id)||!!d.assignments[id]);d.scan.hpRooms=recognised.filter(id=>body.hpRooms?.includes(id));if(body.residents)d.scan.residents=Object.fromEntries(Object.entries(body.residents).filter(([id])=>recognised.includes(id)).map(([id,tags])=>[id,[...new Set(tags)]]))}else{if(!ROOM_IDS.includes(body.room))fail('Salle invalide.');d.sections??={};d.sections[body.room]=body.sections;d.crops[body.room]=body.sections[0];d.scan.hpRooms=d.scan.hpRooms?.filter(id=>id!==body.room);if(d.scan.residents)delete d.scan.residents[body.room]}
  }else if(body.action==='reset'){
   manager();if(previous&&d.roundStart)event(person(d,previous)?.email||'','assignment','Nouvelle ronde','La ronde précédente est terminée. Votre choix précédent n’est plus en attente.');const directory=d.directory,testMode=d.testMode,testRecipient=d.testRecipient;Object.assign(d,initial(),{directory,testMode,testRecipient,sections:{}});
  }else if(body.action==='remind'){
   manager();if(!d.roundStart||!previous)fail('Aucun choix en attente.');if(now-d.lastReminder<60000)fail('Attendez une minute avant de relancer la notification.',429);d.lastReminder=now;
  }
+ // Finish the round automatically only when there is exactly one possible allocation.
+ let automaticAssignment = false;
+ if (body.action === 'start' || body.action === 'choice') {
+   const assignedPeople = new Set(Object.values(d.assignments));
+   const waiting = eligible(d).filter(id => !assignedPeople.has(id));
+   const available = availableChoices(d).filter(room => !d.assignments[room]);
+   if (waiting.length === 1 && available.length === 1) {
+     const [personId] = waiting;
+     const [room] = available;
+     const target = person(d,personId)!;
+     d.assignments[room] = personId;
+     if (room === 'PREOP') d.roles.preop = personId;
+     d.delays[personId] = 0;
+     d.audit.push({at:now,actor:'HDQ',personId,room,delegated:false,automatic:true});
+     event(target.email,'assignment','Votre salle est attribuée',
+       d.testMode ? target.name+' reçoit automatiquement '+choiceLabel(room)+'.' :
+         'Votre affectation pour le '+d.date+' : '+choiceLabel(room)+'.');
+     automaticAssignment = true;
+   }
+ }
  const next=nextChooser(d);
  if(d.roundStart&&next&&(body.action==='start'||body.action==='remind'||next!==previous))event(person(d,next)!.email,'turn',d.testMode?'Tour de '+person(d,next)!.name:'C’est à votre tour',d.testMode?'Choisissez une salle pour simuler le tour de '+person(d,next)!.name+'.':'Choisissez votre salle pour le '+d.date+'.',1);
- if(!d.testMode&&d.roundStart&&['start','choice','correct'].includes(body.action)&&d.roundOwner!==person(d,next||'')?.email){const last=d.audit.at(-1);event(d.roundOwner,'progress','Suivi de la ronde',body.action==='start'?'Ronde démarrée. Prochain : '+(person(d,next||'')?.name||'aucun')+'.':(last?.personId?person(d,last.personId)?.name+' — '+choiceLabel(last.room)+'. ':'Affectation corrigée. ')+'Prochain : '+(person(d,next||'')?.name||'ronde terminée')+'.')}
- if(d.testMode&&body.action==='choice'&&!next)event(d.testRecipient||email,'assignment','Essai terminé','Tous les choix de cette ronde d’essai sont enregistrés.');const pendingEmail=d.testMode?d.testRecipient:person(d,next||'')?.email;for(const e of events)e.badge=d.roundStart&&next&&e.email===pendingEmail?1:0;
+ if(!d.testMode&&d.roundStart&&['start','choice','correct'].includes(body.action)&&d.roundOwner!==person(d,next||'')?.email){const last=d.audit.at(-1);event(d.roundOwner,'progress','Suivi de la ronde',body.action==='start'&&!automaticAssignment?'Ronde démarrée. Prochain : '+(person(d,next||'')?.name||'aucun')+'.':(last?.personId?person(d,last.personId)?.name+' — '+choiceLabel(last.room)+'. ':'Affectation corrigée. ')+'Prochain : '+(person(d,next||'')?.name||'ronde terminée')+'.')}
+ if(d.testMode&&body.action==='choice'&&!next&&!automaticAssignment)event(d.testRecipient||email,'assignment','Essai terminé','Tous les choix de cette ronde d’essai sont enregistrés.');const pendingEmail=d.testMode?d.testRecipient:person(d,next||'')?.email;for(const e of events)e.badge=d.roundStart&&next&&e.email===pendingEmail?1:0;
  d.lastMutationId=mutationId;return {data:d,events};
 }
