@@ -21,7 +21,14 @@ h1{font:700 34px/1.15 Arial,Helvetica,sans-serif;letter-spacing:-.5px}h2{font:70
  .setup-room{border-bottom:1px solid var(--line);padding:3px 0 7px}
  .resident-buttons{display:flex;flex-wrap:wrap;gap:5px;padding:2px 0 3px 28px}
  .resident-buttons button{min-height:44px;min-width:44px;padding:5px 8px;font-size:14px;font-weight:700}
- .resident-buttons button[aria-pressed=true]{background:#e8ddff;color:#452178;border:2px solid #6438a0}
+ .resident-badge[data-level],.resident-buttons button[aria-pressed=true]{background:var(--resident-bg,#e8ddff);color:var(--resident-fg,#452178)}
+ .resident-buttons button[aria-pressed=true]{box-shadow:inset 0 0 0 2px currentColor}
+ [data-level="R1"]{--resident-bg:#d7eaff;--resident-fg:#123f75}
+ [data-level="R3"]{--resident-bg:#cceee4;--resident-fg:#12574a}
+ [data-level="R4"]{--resident-bg:#eadcff;--resident-fg:#482078}
+ [data-level="R5"]{--resident-bg:#f9dbe8;--resident-fg:#791d4b}
+ [data-level="R ect"]{--resident-bg:#fff1b8;--resident-fg:#654600}
+ [data-level="EXT"]{--resident-bg:#e2e7ed;--resident-fg:#303e50}
 </style></head><body><div class="layout"><aside class="rail"><div class="brand">HDQ<small>ANESTHÉSIOLOGIE</small></div><nav class="nav"><button class="active" onclick="window.scrollTo({top:0,behavior:'smooth'})">▦ &nbsp; Choix des salles</button><button onclick="openFull()">▤ &nbsp; Programme complet</button><button onclick="showQueue()">☷ &nbsp; Ordre de sélection</button></nav><div class="railfoot">L’Hôtel-Dieu de Québec<span>Planification des effectifs</span><br>Accès réservé à l’équipe</div></aside><main>
 <section class="loginbox" id="loginPanel"><div class="eyebrow">Planification des effectifs</div><h1>Choix des salles</h1><p>Connectez-vous avec l’adresse inscrite dans la liste d’accès HDQ.</p><label for="loginEmail">Adresse courriel</label><input type="email" id="loginEmail" autocomplete="email" placeholder="prenom.nom@exemple.ca"><button id="loginSend" class="primary" onclick="signIn()">Recevoir un code</button><div id="otpFields" hidden><label for="loginCode">Code reçu par courriel</label><input id="loginCode" inputmode="numeric" autocomplete="one-time-code" placeholder="Votre code"><button id="loginVerify" class="primary" onclick="verifyCode()">Se connecter</button></div><p id="loginMessage" role="status"></p></section>
 <div id="appContent" hidden><header class="top"><div><div class="eyebrow">Planification des effectifs</div><h1>Choix des salles</h1><p>Consultez le programme, puis choisissez lorsque votre tour arrive.</p></div><button onclick="showNotifications()">Notifications <span class="notificationbadge" id="notificationCount" hidden>1</span></button></header>
