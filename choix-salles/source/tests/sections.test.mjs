@@ -29,3 +29,17 @@ test('un en-tête C1 mal lu est relu et fusionné avec le bloc C2',async()=>{
     globalThis.document=savedDocument;
   }
 });
+
+test('le titre Curiethérapie identifie une salle dont le numéro est mal lu',()=>{
+  assert.equal(parseHeading('SALLE NUMÉRO 01 CURIETHÉRAPIE I').room,'CIC');
+});
+
+test('les badges de formation acceptent les mentions sur la même ligne que du texte',async()=>{
+  const {residentLabels}=await import('../web/scan-residents.js');
+  assert.deepEqual(residentLabels([
+    {text:'Annotation R1',confidence:78},
+    {text:'RS',confidence:62},
+    {text:'EXT.',confidence:76},
+    {text:'R3',confidence:20},
+  ]),['EXT','R1','R5']);
+});
