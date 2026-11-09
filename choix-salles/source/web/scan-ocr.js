@@ -1,3 +1,4 @@
+import {outOfProvinceRooms} from './scan-provenance.js';
 import {createWorker,PSM} from 'tesseract.js';
 import {detectedSections,linesFromBlocks,refineHeadingLines} from './scan-sections.js';
 export async function recogniseRoomSections(image,onProgress=()=>{}){
@@ -8,7 +9,7 @@ export async function recogniseRoomSections(image,onProgress=()=>{}){
  let pass=0;let tileProgress=0;const worker=await createWorker('fra',1,{workerPath:'https://cdn.jsdelivr.net/npm/tesseract.js@6.0.1/dist/worker.min.js',corePath:'https://cdn.jsdelivr.net/npm/tesseract.js-core@6.0.0',langPath:'https://cdn.jsdelivr.net/npm/@tesseract.js-data/fra@1.0.0/4.0.0',logger:m=>onProgress(m.status==='recognizing text'?Math.min(100,Math.round(pass<2?pass*25+m.progress*25:pass===2?50+tileProgress*40:90+m.progress*10)):null)});
  try{
   await worker.setParameters({tessedit_pageseg_mode:PSM.SPARSE_TEXT});
-  let output=await worker.recognize(canvas,{}, {blocks:true,text:false});let lines=linesFromBlocks(output.data.blocks);let result=detectedSections(lines,canvas.height);
+  let output=await worker.recognize(canvas,{}, {blocks:true,text:false});let lines=linesFromBlocks(output.data.blocks);
   pass=1;await worker.setParameters({tessedit_pageseg_mode:PSM.AUTO});output=await worker.recognize(canvas,{}, {blocks:true,text:false});lines=lines.concat(linesFromBlocks(output.data.blocks));
   // Local overlapping crops keep small headings large enough on long phone scans.
   // Coordinates are mapped back into the same full-height reference as the first passes.
@@ -28,6 +29,7 @@ export async function recogniseRoomSections(image,onProgress=()=>{}){
   pass=3;
   await worker.setParameters({tessedit_pageseg_mode:PSM.SINGLE_LINE});
   await refineHeadingLines(worker,canvas,canvas.width,canvas.height,lines);
-  return detectedSections(lines,canvas.height);
+  const result = detectedSections(lines,canvas.height);
+  return {...result, hpRooms: outOfProvinceRooms(lines,result.sections,image.width*scale,canvas.height)};
  }finally{await worker.terminate();canvas.width=canvas.height=1}
 }

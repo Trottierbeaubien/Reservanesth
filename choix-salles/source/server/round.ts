@@ -10,7 +10,7 @@ export const actionSchema=z.discriminatedUnion('action',[
  z.object({action:z.literal('choice'),revision:z.number().int(),room:z.string(),personId:id,delegated:z.boolean().default(false)}),
  z.object({action:z.literal('correct'),revision:z.number().int(),room:z.string(),personId:z.string().max(80)}),
  z.object({action:z.literal('crop'),revision:z.number().int(),room:z.string(),crop:z.tuple([z.number().min(0).max(1),z.number().min(0).max(1)]),scanId:z.string()}),
- z.object({action:z.literal('sections'),revision:z.number().int(),scanId:z.string(),sections:z.record(z.enum(['08','09','11','28','30','34','40','42','46','48','CIC']),z.array(section).min(1).max(50))}),
+ z.object({action:z.literal('sections'),revision:z.number().int(),scanId:z.string(),sections:z.record(z.enum(['08','09','11','28','30','34','40','42','46','48','CIC']),z.array(section).min(1).max(50)),hpRooms:z.array(z.string()).max(11).optional()}),
  z.object({action:z.literal('roomSections'),revision:z.number().int(),scanId:z.string(),room:z.string(),sections:z.array(section).min(1).max(50)}),
  z.object({action:z.literal('reset'),revision:z.number().int()}),
  z.object({action:z.literal('remind'),revision:z.number().int()}),
@@ -64,10 +64,10 @@ export function transition(current:Programme,raw:unknown,email:string,now=Date.n
   if(old&&old!==body.personId)event(person(d,old)?.email||'','assignment','Affectation corrigée','Le responsable a retiré votre affectation à '+choiceLabel(body.room)+'. Consultez la ronde.');
   if(body.room==='PREOP')d.roles.preop=d.assignments.PREOP||'';d.audit.push({at:now,actor:email,personId:body.personId,room:body.room,delegated:true});d.lastChoice=now;
  }else if(body.action==='crop'){
-  manager();if(!d.scan||body.scanId!==d.scan.key||!ROOM_IDS.includes(body.room)||body.crop[1]-body.crop[0]<.001)fail('Repères invalides ou programme remplacé.');if((d.sections?.[body.room]?.length||0)>1)fail('Rechargez l’application pour modifier une salle fusionnée.');d.crops[body.room]=body.crop;d.sections??={};d.sections[body.room]=[body.crop];
+  manager();if(!d.scan||body.scanId!==d.scan.key||!ROOM_IDS.includes(body.room)||body.crop[1]-body.crop[0]<.001)fail('Repères invalides ou programme remplacé.');if((d.sections?.[body.room]?.length||0)>1)fail('Rechargez l’application pour modifier une salle fusionnée.');d.crops[body.room]=body.crop;d.sections??={};d.sections[body.room]=[body.crop];d.scan.hpRooms=d.scan.hpRooms?.filter(id=>id!==body.room);
  }else if(body.action==='sections'||body.action==='roomSections'){
   manager();if(!d.scan||d.scan.key!==body.scanId)fail('Le programme a été remplacé. Relancez le repérage.',409);
-  if(body.action==='sections'){d.sections=body.sections;d.scan.roomDetectionDone=true;d.scan.roomDetectionVersion=2;d.crops=Object.fromEntries(Object.entries(body.sections).map(([id,parts])=>[id,parts[0]]));const recognised=ROOM_IDS.filter(id=>body.sections[id as keyof typeof body.sections]?.length);d.openRooms=ROOM_IDS.filter(id=>recognised.includes(id)||!!d.assignments[id])}else{if(!ROOM_IDS.includes(body.room))fail('Salle invalide.');d.sections??={};d.sections[body.room]=body.sections;d.crops[body.room]=body.sections[0]}
+  if(body.action==='sections'){d.sections=body.sections;d.scan.roomDetectionDone=true;d.scan.roomDetectionVersion=2;d.crops=Object.fromEntries(Object.entries(body.sections).map(([id,parts])=>[id,parts[0]]));const recognised=ROOM_IDS.filter(id=>body.sections[id as keyof typeof body.sections]?.length);d.openRooms=ROOM_IDS.filter(id=>recognised.includes(id)||!!d.assignments[id]);d.scan.hpRooms=recognised.filter(id=>body.hpRooms?.includes(id))}else{if(!ROOM_IDS.includes(body.room))fail('Salle invalide.');d.sections??={};d.sections[body.room]=body.sections;d.crops[body.room]=body.sections[0];d.scan.hpRooms=d.scan.hpRooms?.filter(id=>id!==body.room)}
  }else if(body.action==='reset'){
   manager();if(previous&&d.roundStart)event(person(d,previous)?.email||'','assignment','Nouvelle ronde','La ronde précédente est terminée. Votre choix précédent n’est plus en attente.');const directory=d.directory,testMode=d.testMode,testRecipient=d.testRecipient;Object.assign(d,initial(),{directory,testMode,testRecipient,sections:{}});
  }else if(body.action==='remind'){
