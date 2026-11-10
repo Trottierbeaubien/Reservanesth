@@ -1,8 +1,9 @@
 import {retryUncertainHeadings} from './scan-heading-retry.js';
 import {outOfProvinceRooms} from './scan-provenance.js';
 import {createWorker,PSM} from 'tesseract.js';
-import {detectedSections,linesFromBlocks,refineHeadingLines,ROOM_IDS} from './scan-sections.js';
-export async function recogniseRoomSections(image,onProgress=()=>{},expectedRooms=ROOM_IDS){
+import {detectedSections,linesFromBlocks,refineHeadingLines,parseHeading,ROOM_IDS} from './scan-sections.js';
+export async function recogniseRoomSections(image,onProgress=()=>{},expectedRooms){
+ const roomOrder=expectedRooms??ROOM_IDS;
  const stripWidth=Math.round(image.width*.36),scale=Math.min(2.5,850/stripWidth,14000/image.height);
  const canvas=document.createElement('canvas');canvas.width=Math.round(stripWidth*scale);canvas.height=Math.round(image.height*scale);
  canvas.getContext('2d').drawImage(image,0,0,stripWidth,image.height,0,0,canvas.width,canvas.height);
@@ -35,7 +36,43 @@ export async function recogniseRoomSections(image,onProgress=()=>{},expectedRoom
   } catch {
     // The first-pass sections are still usable if an isolated heading cannot be read.
   }
-  const result = detectedSections(lines,canvas.height,expectedRooms);
+  let result = detectedSections(lines,canvas.height,roomOrder);
+  const missing=expectedRooms?.filter(room=>!result.sections[room])||[];
+  if(missing.length){
+    const firstMissing=roomOrder.indexOf(missing[0]);
+    const prior=roomOrder.slice(0,firstMissing).reverse().find(room=>result.sections[room]?.length);
+    const start=prior?Math.floor(result.sections[prior].at(-1)[0]*image.height):0;
+    const headingWidth=Math.max(1,Math.round(image.width*.23));
+    const magnification=Math.min(4,1050/headingWidth);
+    const bandHeight=Math.max(1,Math.floor(1350/magnification));
+    const stride=Math.max(1,Math.floor(bandHeight*.78));
+    try {
+      await worker.setParameters({tessedit_pageseg_mode:PSM.SPARSE_TEXT});
+      for(let y=start;y<image.height;y+=stride){
+        const h=Math.min(bandHeight,image.height-y);
+        tile.width=Math.max(1,Math.round(headingWidth*magnification));
+        tile.height=Math.max(1,Math.round(h*magnification));
+        const context=tile.getContext('2d');
+        context.filter='grayscale(1) contrast(1.45)';
+        context.drawImage(image,0,y,headingWidth,h,0,0,tile.width,tile.height);
+        const found=await worker.recognize(tile,{}, {blocks:true,text:false});
+        for(const line of linesFromBlocks(found.data.blocks)){
+          if(!line.bbox||!parseHeading(line.text))continue;
+          const b=line.bbox;
+          lines.push({...line,bbox:{
+            x0:b.x0/magnification*scale,x1:b.x1/magnification*scale,
+            y0:(y+b.y0/magnification)*scale,y1:(y+b.y1/magnification)*scale
+          }});
+        }
+        if(y+h>=image.height)break;
+      }
+      result=detectedSections(lines,canvas.height,roomOrder);
+    } catch {
+      // Keep the first reading if the focused pass fails.
+    } finally {
+      tile.width=tile.height=1;
+    }
+  }
   return {...result, hpRooms: outOfProvinceRooms(lines,result.sections,image.width*scale,canvas.height)};
  }finally{await worker.terminate();canvas.width=canvas.height=1}
 }

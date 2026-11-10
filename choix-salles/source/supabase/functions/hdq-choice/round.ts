@@ -116,7 +116,8 @@ export function transition(current:Programme,raw:unknown,email:string,now=Date.n
    d.crops[body.room]=body.sections[0];
    d.scan.hpRooms=d.scan.hpRooms?.filter(id=>id!==body.room);
    if(d.scan.residents)delete d.scan.residents[body.room];
-   if(d.scan.verifiedSections?.[body.room])d.scan.verifiedSections[body.room]=body.sections;
+   d.scan.verifiedSections??={};
+   d.scan.verifiedSections[body.room]=body.sections;
   }
  }else if(body.action==='reset'){
   manager();if(previous&&d.roundStart)event(person(d,previous)?.email||'','assignment','Nouvelle ronde','La ronde précédente est terminée. Votre choix précédent n’est plus en attente.');const directory=d.directory,testMode=d.testMode,testRecipient=d.testRecipient;Object.assign(d,initial(),{directory,testMode,testRecipient,sections:{}});
