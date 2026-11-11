@@ -33,11 +33,17 @@ h1{font:700 34px/1.15 Arial,Helvetica,sans-serif;letter-spacing:-.5px}h2{font:70
  .programme-controls:not(:has(button:not([hidden]))){display:none}
  .programme-controls h2{margin:0 0 8px;font:700 21px Arial,sans-serif}
  .programme-buttons{display:flex;flex-wrap:wrap;gap:8px}
-.room-card{display:flex;flex-direction:column;background:white;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.room-card{display:grid;grid-template-columns:minmax(0,1fr);background:white;border:1px solid var(--line);border-radius:12px;overflow:hidden}
 .room-card:has(.room.selected){border-color:var(--teal);box-shadow:0 0 0 1px var(--teal)}
-.room-card .room,.room-card .room.selected{width:100%;flex:1;border:0;box-shadow:none}
+.room-card .room,.room-card .room.selected{grid-area:1 / 1;width:100%;border:0;box-shadow:none}
 .room-card .room:focus-visible{outline-offset:-4px}
-.room-actions{display:grid;gap:6px;padding:0 16px 16px}
+.room-card:has(.room-actions) .state{padding-right:144px;min-height:64px}
+.room-card:has(.room-actions button:nth-child(2)) .state{min-height:124px}
+.room-actions{grid-area:1 / 1;z-index:1;align-self:end;justify-self:end;display:grid;gap:6px;width:136px;margin:0 12px 12px}
+.room-actions button{padding:7px 9px;font-size:14px}
+.room-actions button:focus-visible{outline-offset:1px}
+.room-actions .primary{order:1}
+@media(min-width:761px){.rooms{grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr))}}
 .room-actions:empty{display:none}
 .room-actions button{min-height:44px}
 .boundaries{flex-shrink:0}
