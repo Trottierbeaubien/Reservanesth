@@ -11,3 +11,5 @@
 
 /* Administrator reservation status: visible without relying on colour alone. */
 .card.card-reserved{background:#edf2ff;border-right:2px solid #405b91;border-bottom:2px solid #405b91;border-left:6px solid #405b91}.reservation-status{align-self:flex-start;background:#263e68;color:#fff;border-radius:8px;padding:8px 14px;font-size:17px;font-weight:800;line-height:1.35;letter-spacing:.5px}.card-reserved .bottom{border-top-color:#bac8e0}.card-reserved .badge{color:#263e68;font-weight:750}
+
+.excel-status{background:#fff1d6;border:1px solid #b87512;border-radius:8px;padding:9px 12px;color:#774500;font-weight:700;margin:8px 0}.excel-status small{display:block;font-weight:400}.excel-status.done{background:#edf6f1;border-color:#729a84;color:#315642}.excel-card.pending{border:2px solid #c78620}
